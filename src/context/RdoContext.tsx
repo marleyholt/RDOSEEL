@@ -69,6 +69,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [reports, setReports] = useState<RdoReport[]>([]);
   const [currentReport, setCurrentReport] = useState<RdoReport | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isReportsLoading, setIsReportsLoading] = useState(false);
   const [useLocalFallback, setUseLocalFallbackState] = useState(() => {
     return localStorage.getItem("rdo_use_local_mode") === "true";
   });
@@ -118,7 +119,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (activeIsFirebase && db) {
       const fetchFirebaseReports = async () => {
-        setIsLoading(true);
+        setIsReportsLoading(true);
         const path = "rdos";
         try {
           const q = query(
@@ -141,7 +142,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           loadLocalReports();
           handleFirestoreError(error, OperationType.LIST, path);
         } finally {
-          setIsLoading(false);
+          setIsReportsLoading(false);
         }
       };
       fetchFirebaseReports();
