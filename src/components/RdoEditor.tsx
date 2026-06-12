@@ -356,7 +356,15 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
           </div>
           <div>
             <h2 className="font-bold text-slate-900 text-xs uppercase tracking-tight leading-none">REGISTRO DIÁRIO DE OBRA nº {currentReport.rdoNo}</h2>
-            <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-wider font-semibold">Status: <strong className="text-emerald-700 font-bold">EM DIGITAÇÃO</strong> — {formatPrintDate(currentReport.data).toUpperCase()}</p>
+            <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-wider font-semibold flex items-center gap-1.5">
+              Status: 
+              <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold pb-1 ${
+                currentReport.status === "Finalizado" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+              }`}>
+                {(currentReport.status || "Em Digitação").toUpperCase()}
+              </span> 
+              — {formatPrintDate(currentReport.data).toUpperCase()}
+            </p>
           </div>
         </div>
 
@@ -367,6 +375,22 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
               Sincronizado!
             </span>
           )}
+          
+          <button
+            onClick={async () => {
+              const nextStatus = currentReport.status === "Finalizado" ? "Em Digitação" : "Finalizado";
+              updateReport({ status: nextStatus });
+            }}
+            className={`h-8 flex items-center gap-1.5 px-3 font-bold text-[11px] uppercase tracking-wide rounded transition-all shadow-xs text-white ${
+              currentReport.status === "Finalizado" 
+                ? "bg-slate-700 hover:bg-slate-800" 
+                : "bg-[#004899] hover:bg-[#003c80]"
+            }`}
+          >
+            <CheckCircle className="w-3.5 h-3.5" />
+            {currentReport.status === "Finalizado" ? "Reabrir RDO" : "Finalizar RDO"}
+          </button>
+
           <button
             onClick={handleSave}
             disabled={saving}

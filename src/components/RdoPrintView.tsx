@@ -83,33 +83,30 @@ export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, onClose }) =
   // Helper component to render signatures footer
   const PrintFooter: React.FC<{ pageNum: number }> = ({ pageNum }) => (
     <div className="border-t border-gray-300 grid grid-cols-4 gap-2 text-center text-[10px] mt-auto pt-2 print-footer bg-white">
-      <div className="border-r border-gray-200 pr-2 flex flex-col justify-between align-middle h-24">
-        <span className="font-bold border-b border-gray-100 pb-1 text-gray-700">EMITENTE</span>
+      <div className="border-r border-gray-200 pr-2 flex flex-col justify-end align-middle h-24 pb-1">
+        <span className="font-bold border-b border-gray-100 pb-1 text-gray-700 uppercase">EMITENTE</span>
         <div className="flex flex-col items-center">
+          <div className="w-4/5 border-b border-gray-300 mt-8 mb-1"></div>
           <span className="font-semibold block truncate max-w-full text-gray-800">{report.emitenteNome || "Representante Emissor"}</span>
-          <span className="text-[7px] text-gray-500 italic block leading-tight">
-            {report.emitenteConsolidado || "Assinado eletronicamente via RDO Web"}
-          </span>
-          <BarcodeSvg code={report.emitenteHash || "emitente-signature-hash"} />
+          <span className="text-[7px] text-gray-400 block font-mono">SEEL ENGENHARIA</span>
         </div>
       </div>
       
-      <div className="border-r border-gray-200 pr-2 flex flex-col justify-between align-middle h-24">
-        <span className="font-bold border-b border-gray-100 pb-1 text-gray-700">GERENCIADORA</span>
-        <div className="flex flex-col items-center justify-center flex-1">
-          <div className="w-2/3 border-b border-gray-300 mt-6"></div>
-          <span className="text-[8px] text-gray-400 mt-1 block">{report.gerenciadora || "-"}</span>
+      <div className="border-r border-gray-200 pr-2 flex flex-col justify-end align-middle h-24 pb-1">
+        <span className="font-bold border-b border-gray-100 pb-1 text-gray-700 uppercase">GERENCIADORA</span>
+        <div className="flex flex-col items-center">
+          <div className="w-4/5 border-b border-gray-300 mt-8 mb-1"></div>
+          <span className="font-semibold block truncate max-w-full text-gray-800">-</span>
+          <span className="text-[7px] text-gray-400 block font-mono">{report.gerenciadora || "FISCALIZAÇÃO"}</span>
         </div>
       </div>
 
-      <div className="border-r border-gray-200 pr-2 flex flex-col justify-between align-middle h-24">
-        <span className="font-bold border-b border-gray-100 pb-1 text-gray-700">CONTRATANTE</span>
+      <div className="border-r border-gray-200 pr-2 flex flex-col justify-end align-middle h-24 pb-1">
+        <span className="font-bold border-b border-gray-100 pb-1 text-gray-700 uppercase">CONTRATANTE</span>
         <div className="flex flex-col items-center">
+          <div className="w-4/5 border-b border-gray-300 mt-8 mb-1"></div>
           <span className="font-semibold block truncate max-w-full text-gray-800">{report.contratanteNome || "Fiscal Contratante"}</span>
-          <span className="text-[7px] text-gray-500 italic block leading-tight">
-            {report.contratanteAprovado || "Aprovado eletronicamente no sistema"}
-          </span>
-          <BarcodeSvg code={report.contratanteHash || "contratante-signature-hash"} />
+          <span className="text-[7px] text-gray-400 block font-mono">{report.cliente || "CLIENTE"}</span>
         </div>
       </div>
 

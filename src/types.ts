@@ -103,6 +103,8 @@ export interface RdoReport {
   rdoNo: string;
   data: string; // YYYY-MM-DD
   obra: string;
+  obraId?: string; // Links to the ObraConfig
+  status?: "Em Digitação" | "Finalizado";
   cliente: string;
   gestor: string;
   gerenciadora: string;
@@ -143,3 +145,37 @@ export interface RdoReport {
   createdAt?: string;
   updatedAt?: string;
 }
+
+export interface ObraActivity {
+  id: string;
+  ref: string;
+  fase: string;
+  identificador: string;
+  descricao: string;
+  unidade?: string;
+}
+
+export interface ObraPermission {
+  email: string;
+  access: "view" | "edit";
+}
+
+export interface ObraConfig {
+  id?: string;
+  userId: string;
+  nome: string;
+  numeroContrato: string;
+  cliente: string;
+  gerenciadora: string;
+  dataInicio: string; // YYYY-MM-DD
+  prazoContratual: number; // in days
+  aditivoPrazo: number; // in days
+  logoCliente?: string; // base64
+  logoSeel?: string; // base64
+  atividades: ObraActivity[]; // PQ catalogue
+  subcontratadas: string[]; // list of companies
+  permissoes: ObraPermission[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+

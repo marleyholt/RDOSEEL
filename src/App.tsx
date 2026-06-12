@@ -8,6 +8,7 @@ import { RdoProvider, useRdoStore } from "./context/RdoContext";
 import { AuthScreen } from "./components/AuthScreen";
 import { RdoEditor } from "./components/RdoEditor";
 import { RdoPrintView } from "./components/RdoPrintView";
+import { ObraManagerModal } from "./components/ObraManagerModal";
 import { RdoReport } from "./types";
 import { 
   HardHat, 
@@ -50,12 +51,16 @@ function AppContent() {
     logout, 
     saveReport, 
     deleteReport, 
-    createNewReport 
+    createNewReport,
+    obras,
+    currentObra,
+    setCurrentObra
   } = useRdoStore();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [showPrintView, setShowPrintView] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [showObraManager, setShowObraManager] = useState(false);
 
   if (isLoading) {
     return (
@@ -73,12 +78,16 @@ function AppContent() {
     return <AuthScreen />;
   }
 
-  // Filter RDO reports based on search
-  const filteredReports = reports.filter(r => 
-    r.rdoNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.obra.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.data.includes(searchTerm)
-  );
+  // Filter RDO reports based on search AND worksite selection
+  const filteredReports = reports.filter(r => {
+    const matchesSearch = r.rdoNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          r.obra.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          r.data.includes(searchTerm);
+    if (currentObra) {
+      return matchesSearch && r.obraId === currentObra.id;
+    }
+    return matchesSearch;
+  });
 
   const handleCreateNewRdo = () => {
     const freshTemplate = createNewReport();
@@ -149,8 +158,37 @@ function AppContent() {
         {/* SIDEBAR: HISTORY LOG LIST (Left column) - Slate-900 High Density */}
         <aside className="w-72 bg-slate-900 flex flex-col shrink-0 overflow-y-auto border-r border-slate-950 no-print text-slate-300">
           
+          {/* Worksite Active Select and Settings Trigger */}
+          <div className="p-4 pb-2 border-b border-slate-800/80 space-y-1.5 shrink-0 bg-slate-950/60">
+            <div className="flex items-center justify-between">
+              <label className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Obra Ativa</label>
+              <button
+                onClick={() => setShowObraManager(true)}
+                className="text-[9px] text-amber-500 hover:text-amber-400 font-bold uppercase tracking-wider hover:underline"
+              >
+                Gerenciar Obras
+              </button>
+            </div>
+            <select
+              value={currentObra?.id || ""}
+              onChange={(e) => {
+                const found = obras.find(o => o.id === e.target.value);
+                if (found) {
+                  setCurrentObra(found);
+                }
+              }}
+              className="w-full bg-slate-800 border-none rounded text-xs py-1.5 px-2 text-slate-200 focus:ring-1 focus:ring-amber-500 outline-none font-semibold cursor-pointer"
+            >
+              {obras.map((obra) => (
+                <option key={obra.id} value={obra.id}>
+                  {obra.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Create Button & Search bar */}
-          <div className="p-4 border-b border-slate-800 space-y-3 shrink-0 bg-slate-950/40">
+          <div className="p-4 pt-3 border-b border-slate-850 space-y-3 shrink-0 bg-slate-950/20">
             <button
               onClick={handleCreateNewRdo}
               className="w-full h-9 bg-amber-600 hover:bg-amber-700 text-white rounded font-bold text-xs tracking-wide flex items-center justify-center gap-1.5 transition-all shadow-sm outline-none"
@@ -304,6 +342,12 @@ function AppContent() {
           </div>
         </div>
       )}
+
+      {/* 5. WORKSITE CONFIGURATION CONTROLS PANEL */}
+      <ObraManagerModal 
+        isOpen={showObraManager} 
+        onClose={() => setShowObraManager(false)} 
+      />
 
     </div>
   );

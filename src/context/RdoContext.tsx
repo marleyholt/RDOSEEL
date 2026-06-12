@@ -9,7 +9,8 @@ import {
   CompanyLaborGroup, 
   EquipmentMobilizedDetail, 
   Activity, 
-  StoppagesDetail 
+  StoppagesDetail,
+  ObraConfig
 } from "../types";
 import { 
   isFirebaseConfigured, 
@@ -57,6 +58,13 @@ interface RdoContextType {
   deleteReport: (id: string) => Promise<void>;
   createNewReport: () => RdoReport;
   loadReportToEdit: (id: string) => void;
+  // Obras additions
+  obras: ObraConfig[];
+  currentObra: ObraConfig | null;
+  setCurrentObra: (obra: ObraConfig | null) => void;
+  saveObra: (obra: ObraConfig) => Promise<void>;
+  deleteObra: (id: string) => Promise<void>;
+  isObrasLoading: boolean;
 }
 
 const RdoContext = createContext<RdoContextType | undefined>(undefined);
@@ -64,12 +72,41 @@ const RdoContext = createContext<RdoContextType | undefined>(undefined);
 const LOCAL_REPORTS_KEY = "rdo_reports_local";
 const LOCAL_USER_KEY = "rdo_user_local";
 
+const DEFAULT_OBRAS: ObraConfig[] = [
+  {
+    id: "obra-saneamento-leste",
+    userId: "demo-user",
+    nome: "SANEAMENTO LESTE",
+    numeroContrato: "CT-2015/09",
+    cliente: "SABESP",
+    gerenciadora: "SEEL",
+    dataInicio: "2016-01-01",
+    prazoContratual: 1400,
+    aditivoPrazo: 61,
+    subcontratadas: ["Irmãos Freitas", "Hidropav"],
+    permissoes: [],
+    atividades: [
+      { id: "act-1", ref: "001", fase: "ATIVIDADES - FASE 01 - REDE EXTERNA", identificador: "3.2", descricao: "Demolicao manual concreto armado (pilar / viga / laje) - incl empilhacao lateral no canteiro", unidade: "m³" },
+      { id: "act-2", ref: "002", fase: "ATIVIDADES - FASE 01 - REDE EXTERNA", identificador: "3.6", descricao: "Aterro apiloado (manual) em camadas de 20 cm com material de empréstimo", unidade: "m³" },
+      { id: "act-3", ref: "003", fase: "ATIVIDADES - GERÊNCIA", identificador: "1.1", descricao: "Engenheiro ou Arquiteto auxiliar/júnior de obra.", unidade: "un" },
+      { id: "act-4", ref: "004", fase: "ATIVIDADES - FASE 12 - COND. REAL PARK", identificador: "3.4", descricao: "Demolição de lastro de concreto simples", unidade: "m³" },
+      { id: "act-5", ref: "005", fase: "ATIVIDADES - ADMINISTRAÇÃO CONTRATUAL", identificador: "4.2", descricao: "Concreto magro E=5cm, preparo com betoneira", unidade: "m²" }
+    ]
+  }
+];
+
 export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | { uid: string; email: string } | null>(null);
   const [reports, setReports] = useState<RdoReport[]>([]);
   const [currentReport, setCurrentReport] = useState<RdoReport | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isReportsLoading, setIsReportsLoading] = useState(false);
+  
+  // Obras additions
+  const [obras, setObras] = useState<ObraConfig[]>([]);
+  const [currentObra, setCurrentObra] = useState<ObraConfig | null>(null);
+  const [isObrasLoading, setIsObrasLoading] = useState(false);
+
   const [useLocalFallback, setUseLocalFallbackState] = useState(() => {
     return localStorage.getItem("rdo_use_local_mode") === "true";
   });
@@ -107,6 +144,118 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [activeIsFirebase]);
 
+  // Fetch Obras when User changes
+  useEffect(() => {
+    if (isLoading) return;
+
+    if (!user) {
+      setObras([]);
+      setCurrentObra(null);
+      return;
+    }
+
+    if (activeIsFirebase && db) {
+      const fetchFirebaseObras = async () => {
+        setIsObrasLoading(true);
+        try {
+          // Fetch Obras created by me
+          const qOwn = query(collection(db, "obras"), where("userId", "==", user.uid));
+          const snapOwn = await getDocs(qOwn);
+          const loadedMap: Record<string, ObraConfig> = {};
+          
+          snapOwn.forEach((docSnap) => {
+            loadedMap[docSnap.id] = { id: docSnap.id, ...docSnap.data() } as ObraConfig;
+          });
+
+          // Fetch Obras shared with my email
+          if (user.email) {
+            const userEmailLower = user.email.toLowerCase();
+            const qShared = query(
+              collection(db, "obras"), 
+              where("permissoesEmails", "array-contains", userEmailLower)
+            );
+            const snapShared = await getDocs(qShared);
+            snapShared.forEach((docSnap) => {
+              loadedMap[docSnap.id] = { id: docSnap.id, ...docSnap.data() } as ObraConfig;
+            });
+          }
+
+          const loaded = Object.values(loadedMap);
+          setObras(loaded);
+          if (loaded.length > 0) {
+            const storedCurrentId = localStorage.getItem("rdo_current_obra_id");
+            const found = loaded.find(o => o.id === storedCurrentId);
+            setCurrentObra(found || loaded[0]);
+          } else {
+            // Seed a default obra for the user in Firebase if they have none
+            const defaultSeeded = {
+              userId: user.uid,
+              nome: "SANEAMENTO LESTE",
+              numeroContrato: "CT-2015/09",
+              cliente: "SABESP",
+              gerenciadora: "SEEL",
+              dataInicio: "2016-01-01",
+              prazoContratual: 1400,
+              aditivoPrazo: 61,
+              subcontratadas: ["Irmãos Freitas", "Hidropav"],
+              permissoes: [],
+              permissoesEmails: [],
+              atividades: [
+                { id: "act-1", ref: "001", fase: "ATIVIDADES - FASE 01 - REDE EXTERNA", identificador: "3.2", descricao: "Demolicao manual concreto armado (pilar / viga / laje) - incl empilhacao lateral no canteiro", unidade: "m³" },
+                { id: "act-2", ref: "002", fase: "ATIVIDADES - FASE 01 - REDE EXTERNA", identificador: "3.6", descricao: "Aterro apiloado (manual) em camadas de 20 cm com material de empréstimo", unidade: "m³" },
+                { id: "act-3", ref: "003", fase: "ATIVIDADES - GERÊNCIA", identificador: "1.1", descricao: "Engenheiro ou Arquiteto auxiliar/júnior de obra.", unidade: "un" },
+                { id: "act-4", ref: "004", fase: "ATIVIDADES - FASE 12 - COND. REAL PARK", identificador: "3.4", descricao: "Demolição de lastro de concreto simples", unidade: "m³" },
+                { id: "act-5", ref: "005", fase: "ATIVIDADES - ADMINISTRAÇÃO CONTRATUAL", identificador: "4.2", descricao: "Concreto magro E=5cm, preparo com betoneira", unidade: "m²" }
+              ],
+              createdAt: new Date().toISOString()
+            };
+            const colRef = collection(db, "obras");
+            const docRef = await addDoc(colRef, defaultSeeded);
+            const savedObra = { id: docRef.id, ...defaultSeeded } as ObraConfig;
+            setObras([savedObra]);
+            setCurrentObra(savedObra);
+          }
+        } catch (error) {
+          console.error("Firebase fetch Obras failed, falling back to local:", error);
+          loadLocalObras();
+        } finally {
+          setIsObrasLoading(false);
+        }
+      };
+      fetchFirebaseObras();
+    } else {
+      loadLocalObras();
+    }
+  }, [user, isLoading, activeIsFirebase]);
+
+  const loadLocalObras = () => {
+    const raw = localStorage.getItem("rdo_obras_local");
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as ObraConfig[];
+        setObras(parsed);
+        if (parsed.length > 0) {
+          const storedCurrentId = localStorage.getItem("rdo_current_obra_id");
+          const found = parsed.find(o => o.id === storedCurrentId);
+          setCurrentObra(found || parsed[0]);
+        }
+      } catch {
+        setObras(DEFAULT_OBRAS);
+        setCurrentObra(DEFAULT_OBRAS[0]);
+      }
+    } else {
+      localStorage.setItem("rdo_obras_local", JSON.stringify(DEFAULT_OBRAS));
+      setObras(DEFAULT_OBRAS);
+      setCurrentObra(DEFAULT_OBRAS[0]);
+    }
+  };
+
+  useEffect(() => {
+    if (currentObra?.id) {
+      localStorage.setItem("rdo_current_obra_id", currentObra.id);
+    }
+  }, [currentObra]);
+
   // Fetch Reports when User changes
   useEffect(() => {
     if (isLoading) return;
@@ -130,7 +279,13 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const snapshot = await getDocs(q);
           const loaded: RdoReport[] = [];
           snapshot.forEach((docSnap) => {
-            loaded.push({ id: docSnap.id, ...docSnap.data() } as RdoReport);
+            const rData = docSnap.data();
+            loaded.push({ 
+              id: docSnap.id, 
+              ...rData,
+              obraId: rData.obraId || "obra-saneamento-leste",
+              status: rData.status || "Em Digitação"
+            } as RdoReport);
           });
           setReports(loaded);
           if (loaded.length > 0) {
@@ -138,7 +293,6 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         } catch (error) {
           console.error("Firebase fetch failed, falling back to local:", error);
-          // Fallback parsing local storage
           loadLocalReports();
           handleFirestoreError(error, OperationType.LIST, path);
         } finally {
@@ -156,19 +310,25 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as RdoReport[];
-        setReports(parsed);
-        if (parsed.length > 0) {
-          setCurrentReport(parsed[0]);
+        const updated = parsed.map(r => ({
+          ...r,
+          obraId: r.obraId || "obra-saneamento-leste",
+          status: r.status || "Em Digitação"
+        }));
+        setReports(updated);
+        if (updated.length > 0) {
+          setCurrentReport(updated[0]);
         }
       } catch {
-        setReports(DEFAULT_REPORTS);
-        setCurrentReport(DEFAULT_REPORTS[0]);
+        const seeded = DEFAULT_REPORTS.map(r => ({ ...r, obraId: "obra-saneamento-leste", status: "Em Digitação" as const }));
+        setReports(seeded);
+        setCurrentReport(seeded[0]);
       }
     } else {
-      // Initialize with sample reports
-      localStorage.setItem(LOCAL_REPORTS_KEY, JSON.stringify(DEFAULT_REPORTS));
-      setReports(DEFAULT_REPORTS);
-      setCurrentReport(DEFAULT_REPORTS[0]);
+      const seeded = DEFAULT_REPORTS.map(r => ({ ...r, obraId: "obra-saneamento-leste", status: "Em Digitação" as const }));
+      localStorage.setItem(LOCAL_REPORTS_KEY, JSON.stringify(seeded));
+      setReports(seeded);
+      setCurrentReport(seeded[0]);
     }
   };
 
@@ -289,34 +449,44 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // Helper to calculate end date
+  const calculateEndDate = (startDateStr: string, durationDays: number, extensionDays: number): string => {
+    if (!startDateStr) return "";
+    try {
+      const date = new Date(startDateStr + "T12:00:00");
+      const totalDays = Number(durationDays || 0) + Number(extensionDays || 0);
+      date.setDate(date.getDate() + totalDays);
+      return date.toISOString().split("T")[0];
+    } catch (e) {
+      return "";
+    }
+  };
+
+  // Helper to calculate project days elapsed/remaining
+  const computeProjectDays = (startDateStr: string, rdoDateStr: string, totalPeriodDays: number) => {
+    if (!startDateStr || !rdoDateStr) {
+      return { incorrido: 0, faltante: totalPeriodDays };
+    }
+    try {
+      const start = new Date(startDateStr + "T12:00:00");
+      const rdo = new Date(rdoDateStr + "T12:00:00");
+      
+      const diffTime = rdo.getTime() - start.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      
+      const incorrido = Math.max(0, diffDays);
+      const faltante = Math.max(0, totalPeriodDays - incorrido);
+      
+      return { incorrido, faltante };
+    } catch (e) {
+      return { incorrido: 0, faltante: totalPeriodDays };
+    }
+  };
+
   // Create template report helper
   const createNewReport = (): RdoReport => {
     const todayStr = new Date().toISOString().split("T")[0];
     
-    // Default detailed labor structure helper
-    const defaultLabor: CompanyLaborGroup[] = [
-      {
-        id: "group-1",
-        nome: "S SEEL - Engenharia",
-        items: [
-          { id: "itm-1", cargo: "Armador", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" },
-          { id: "itm-2", cargo: "Carpinteiro", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" },
-          { id: "itm-3", cargo: "Mestre de obras", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" },
-          { id: "itm-4", cargo: "Encarregado", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" },
-          { id: "itm-5", cargo: "Servente", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" },
-          { id: "itm-6", cargo: "Engenheiro de Obra", c: 0, f: 0, a: 0, t: 0, moiMod: "MOI" }
-        ]
-      },
-      {
-        id: "group-2",
-        nome: "Irmãos Freitas (Subcontratado)",
-        items: [
-          { id: "itm-7", cargo: "Motorista", c: 0, f: 0, a: 0, t: 0, moiMod: "MOI" },
-          { id: "itm-8", cargo: "Vigia", c: 0, f: 0, a: 0, t: 0, moiMod: "MOI" }
-        ]
-      }
-    ];
-
     const defaultStoppages: StoppagesDetail = {
       chuva: {
         ativo: false,
@@ -356,11 +526,182 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     };
 
+    // Requirement 3: Copy information from previous RDO if possible
+    if (currentObra) {
+      const matchedReports = reports.filter(r => r.obraId === currentObra.id);
+      if (matchedReports.length > 0) {
+        // Sort descending by date to get the absolute previous RDO
+        const sorted = [...matchedReports].sort((a, b) => b.data.localeCompare(a.data));
+        const lastRdo = sorted[0];
+
+        // Compute incremental report number
+        let nextRdoNo = lastRdo.rdoNo;
+        const matchDigits = lastRdo.rdoNo.match(/^(.*?)(\d+)$/);
+        if (matchDigits) {
+          const prefix = matchDigits[1];
+          const digits = matchDigits[2];
+          const nextVal = (parseInt(digits, 10) + 1).toString().padStart(digits.length, "0");
+          nextRdoNo = prefix + nextVal;
+        } else {
+          nextRdoNo = lastRdo.rdoNo + "-1";
+        }
+
+        // Calculate current elapsed days based on the new RDO's date
+        const totalPeriodDays = Number(currentObra.prazoContratual || 0) + Number(currentObra.aditivoPrazo || 0);
+        const { incorrido, faltante } = computeProjectDays(currentObra.dataInicio, todayStr, totalPeriodDays);
+
+        return {
+          ...lastRdo,
+          id: undefined, // Let it generate a new id on saving
+          rdoNo: nextRdoNo,
+          data: todayStr,
+          status: "Em Digitação",
+          prazoIncorrido: incorrido,
+          prazoFaltante: faltante,
+          // Reset signature parameters as they need separate flow
+          emitenteConsolidado: "",
+          emitenteHash: "",
+          contratanteAprovado: "",
+          contratanteHash: "",
+          createdAt: undefined,
+          updatedAt: undefined
+        };
+      }
+    }
+
+    // Default template from Current Obra
+    if (currentObra) {
+      const totalPeriodDays = Number(currentObra.prazoContratual || 0) + Number(currentObra.aditivoPrazo || 0);
+      const calculatedEnd = calculateEndDate(currentObra.dataInicio, currentObra.prazoContratual, currentObra.aditivoPrazo);
+      
+      const dateParts = currentObra.dataInicio.split("-");
+      const formattedInicio = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}` : "01/01/2026";
+      
+      const endParts = calculatedEnd.split("-");
+      const formattedTermino = endParts.length === 3 ? `${endParts[2]}/${endParts[1]}/${endParts[0]}` : "31/12/2026";
+
+      const { incorrido, faltante } = computeProjectDays(currentObra.dataInicio, todayStr, totalPeriodDays);
+
+      const effectiveLabor: CompanyLaborGroup[] = [
+        {
+          id: "seel-labor",
+          nome: "S SEEL - Engenharia",
+          items: [
+            { id: "seel-l1", cargo: "Armador", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" },
+            { id: "seel-l2", cargo: "Carpinteiro", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" },
+            { id: "seel-l3", cargo: "Mestre de obras", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" },
+            { id: "seel-l4", cargo: "Encarregado", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" },
+            { id: "seel-l5", cargo: "Servente", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" },
+            { id: "seel-l6", cargo: "Engenheiro de Obra", c: 0, f: 0, a: 0, t: 0, moiMod: "MOI" }
+          ]
+        },
+        ...(currentObra.subcontratadas || []).map((sub, idx) => ({
+          id: `sub-labor-${idx}`,
+          nome: sub,
+          items: [
+            { id: `sub-l1-${idx}`, cargo: "Encarregado", c: 0, f: 0, a: 0, t: 0, moiMod: "MOI" },
+            { id: `sub-l2-${idx}`, cargo: "Oficial", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" },
+            { id: `sub-l3-${idx}`, cargo: "Ajudante", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" }
+          ]
+        }))
+      ];
+
+      const defaultActivities = (currentObra.atividades || []).map((act, index) => ({
+        id: `act-r-${index}`,
+        ref: act.ref,
+        fase: act.fase,
+        identificador: act.identificador,
+        descricao: act.descricao,
+        intervalo: "E+m",
+        total: "0"
+      }));
+
+      return {
+        userId: user?.uid || "demo-user",
+        rdoNo: `RDO-${todayStr.replace(/-/g, "")}`,
+        data: todayStr,
+        obra: currentObra.nome,
+        obraId: currentObra.id,
+        status: "Em Digitação",
+        cliente: currentObra.cliente,
+        gestor: "João Medeiros",
+        gerenciadora: currentObra.gerenciadora,
+        prazo: totalPeriodDays,
+        prazoIncorrido: incorrido,
+        prazoFaltante: faltante,
+        inicio: formattedInicio,
+        termino: formattedTermino,
+        acidentes: {
+          comAfastamentoDia: 0,
+          comAfastamentoAusentesDia: 0,
+          comAfastamentoAcumulado: 0,
+          semAfastamentoDia: 0,
+          semAfastamentoAcumulado: 0
+        },
+        efetivoSummary: {
+          moi: 0,
+          mod: 0,
+          subcontratadosMoiMod: 0,
+          afastados: 0,
+          total: 0
+        },
+        paralisacoesSummary: {
+          totalHorasParalisadasDia: 0,
+          numeroParalisacoes: 0
+        },
+        equipamentosSummary: {
+          mobilizados: 0,
+          subcontratadosMobilizados: 0,
+          total: 0
+        },
+        atividades: defaultActivities,
+        fatosRelevantes: [],
+        paralisacoesDetalhe: defaultStoppages,
+        chuvaMmPorHora: {
+          "6h": 0, "7h": 0, "8h": 0, "9h": 0, "10h": 0, "11h": 0, "12h": 0, "13h": 0, "14h": 0,
+          "15h": 0, "16h": 0, "17h": 0, "18h": 0, "19h": 0, "20h": 0, "21h": 0, "22h": 0, "23h": 0,
+          "0h": 0, "1h": 0, "2h": 0, "3h": 0, "4h": 0, "5h": 0
+        },
+        precipitacao: {
+          manha: 0,
+          tarde: 0,
+          noite: 0,
+          total: 0,
+          acumuladoMes: 0,
+          acumuladoMesAnterior: 0
+        },
+        efetivoDetalhado: effectiveLabor,
+        equipamentosDetalhado: [],
+        comentariosGerenciadoraContratante: [],
+        emitenteNome: "João Medeiros",
+        emitenteConsolidado: "",
+        emitenteHash: "ff2b2060a7b8e8ae496a9553579effac",
+        contratanteNome: "José Torres",
+        contratanteAprovado: "",
+        contratanteHash: "29381edd9b0233ff2655f9571859320a"
+      };
+    }
+
+    // Ultimate fallback if no currentObra exists either
+    const defaultLabor: CompanyLaborGroup[] = [
+      {
+        id: "group-1",
+        nome: "S SEEL - Engenharia",
+        items: [
+          { id: "itm-1", cargo: "Armador", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" },
+          { id: "itm-2", cargo: "Carpinteiro", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" },
+          { id: "itm-3", cargo: "Mestre de obras", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" }
+        ]
+      }
+    ];
+
     return {
       userId: user?.uid || "demo-user",
       rdoNo: `RDO-${todayStr.replace(/-/g, "")}`,
       data: todayStr,
       obra: "SANEAMENTO LESTE",
+      obraId: "obra-saneamento-leste",
+      status: "Em Digitação",
       cliente: "SABESP",
       gestor: "João Medeiros",
       gerenciadora: "SEEL",
@@ -430,6 +771,88 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   };
 
+  // Save/Delete Obra Functions
+  const saveObra = async (obra: ObraConfig) => {
+    if (!user) throw new Error("Usuário não autenticado");
+
+    const permissionsEmails = (obra.permissoes || []).map(p => p.email.trim().toLowerCase());
+    const obraToSave = {
+      ...obra,
+      userId: obra.userId || user.uid,
+      permissoesEmails: permissionsEmails,
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (activeIsFirebase && db) {
+      const path = "obras";
+      try {
+        if (obraToSave.id) {
+          const docRef = doc(db, path, obraToSave.id);
+          await setDoc(docRef, obraToSave);
+          setObras(prev => 
+            prev.map(o => o.id === obraToSave.id ? obraToSave : o)
+          );
+          if (currentObra?.id === obraToSave.id) {
+            setCurrentObra(obraToSave);
+          }
+        } else {
+          obraToSave.createdAt = new Date().toISOString();
+          const collRef = collection(db, path);
+          const docRef = await addDoc(collRef, obraToSave);
+          const savedWithId = { ...obraToSave, id: docRef.id };
+          setObras(prev => [savedWithId, ...prev]);
+          setCurrentObra(savedWithId);
+        }
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, path);
+      }
+    } else {
+      let updatedObras: ObraConfig[] = [];
+      if (obraToSave.id) {
+        updatedObras = obras.map(o => o.id === obraToSave.id ? { ...obraToSave } : o);
+      } else {
+        const generatedId = "obra-" + Math.random().toString(36).substr(2, 9);
+        const newObra = {
+          ...obraToSave,
+          id: generatedId,
+          createdAt: new Date().toISOString()
+        };
+        updatedObras = [newObra, ...obras];
+        obraToSave.id = generatedId;
+      }
+      
+      localStorage.setItem("rdo_obras_local", JSON.stringify(updatedObras));
+      setObras(updatedObras);
+      const savedRef = updatedObras.find(o => o.id === obraToSave.id) || obraToSave;
+      setCurrentObra(savedRef);
+    }
+  };
+
+  const deleteObra = async (id: string) => {
+    if (!user) throw new Error("Usuário não autenticado");
+
+    if (activeIsFirebase && db) {
+      const path = `obras/${id}`;
+      try {
+        await deleteDoc(doc(db, "obras", id));
+        const remaining = obras.filter(o => o.id !== id);
+        setObras(remaining);
+        if (currentObra?.id === id) {
+          setCurrentObra(remaining.length > 0 ? remaining[0] : null);
+        }
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, path);
+      }
+    } else {
+      const updatedObras = obras.filter(o => o.id !== id);
+      localStorage.setItem("rdo_obras_local", JSON.stringify(updatedObras));
+      setObras(updatedObras);
+      if (currentObra?.id === id) {
+        setCurrentObra(updatedObras.length > 0 ? updatedObras[0] : null);
+      }
+    }
+  };
+
   const loadReportToEdit = (id: string) => {
     const report = reports.find(r => r.id === id);
     if (report) {
@@ -454,7 +877,14 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       saveReport,
       deleteReport,
       createNewReport,
-      loadReportToEdit
+      loadReportToEdit,
+      // Obras additions
+      obras,
+      currentObra,
+      setCurrentObra,
+      saveObra,
+      deleteObra,
+      isObrasLoading
     }}>
       {children}
     </RdoContext.Provider>
