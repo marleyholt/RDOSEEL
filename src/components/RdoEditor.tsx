@@ -36,7 +36,7 @@ interface RdoEditorProps {
 }
 
 export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
-  const { currentReport, saveReport, isFirebase, obras } = useRdoStore();
+  const { currentReport, setCurrentReport, saveReport, isFirebase, obras, reports } = useRdoStore();
   const [activeTab, setActiveTab] = useState<"geral" | "atividades" | "paralisacoes" | "efetivo" | "equipamentos">("geral");
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -52,9 +52,9 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
     );
   }
 
-  // Quick edit wrapper
+  // Quick edit wrapper - updates React state in context without writing to Firebase
   const updateReport = (changes: Partial<RdoReport>) => {
-    saveReport({
+    setCurrentReport({
       ...currentReport,
       ...changes
     } as RdoReport);
@@ -79,10 +79,15 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
 
       const computedElapsed = Number(currentReport.prazoIncorrido || 0);
       const computedRemaining = Math.max(0, Number(currentReport.prazo || 0) - computedElapsed);
+      const computedAccumulatedRain = calculateAccumulatedMonthRain();
 
       await saveReport({
         ...currentReport,
         prazoFaltante: computedRemaining,
+        precipitacao: {
+          ...currentReport.precipitacao,
+          acumuladoMes: computedAccumulatedRain
+        },
         efetivoSummary: {
           ...currentReport.efetivoSummary,
           moi: computedMoi,
@@ -154,9 +159,56 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
     updateReport({ atividades: updated });
   };
 
+  // Dynamic accumulated rainfall calculation
+  const calculateAccumulatedMonthRain = (): number => {
+    if (!currentReport) return 0;
+    
+    // 1. Start with the "Precipitação Acumulada no Mês Anterior (mm)"
+    let sum = Number(currentReport.precipitacao?.acumuladoMesAnterior || 0);
+    
+    // 2. Identify the current month/year prefix (e.g. "2026-06")
+    const currentYearMonth = currentReport.data ? currentReport.data.substring(0, 7) : "";
+    if (!currentYearMonth) {
+      return Math.round((sum + Number(currentReport.precipitacao?.total || 0)) * 10) / 10;
+    }
+    
+    // 3. Sum precipitation from other reports in the same month of the same Obra up to the current daily report
+    const allReports = reports || [];
+    allReports.forEach(r => {
+      // Clean matching: must be same Obra
+      const isSameObra = (r.obraId && r.obraId === currentReport.obraId) || (r.obra === currentReport.obra);
+      if (!isSameObra) return;
+      
+      // Must be same month
+      if (r.data && r.data.startsWith(currentYearMonth)) {
+        // Must be strictly prior to our current report's date to avoid double counting today
+        if (r.data < currentReport.data && r.id !== currentReport.id) {
+          sum += Number(r.precipitacao?.total || 0);
+        }
+      }
+    });
+    
+    // 4. Add the current in-memory report's precipitation for today
+    sum += Number(currentReport.precipitacao?.total || 0);
+    
+    return Math.round(sum * 10) / 10;
+  };
+
   // Stoppage Operation wrapper
-  const handleUpdateStoppage = (category: "chuva" | "raios" | "projetos" | "vizinhos", fields: Partial<StoppageDetailRow>) => {
+  const handleUpdateStoppage = (category: "chuva" | "raios" | "projetos" | "vizinhos" | "outros", fields: Partial<StoppageDetailRow>) => {
     const detail = { ...currentReport.paralisacoesDetalhe };
+    // Lazy initialize outros in case it doesn't exist on historic reports
+    if (!detail[category]) {
+      detail[category] = {
+        ativo: false,
+        horas: [],
+        frentes: "",
+        local: "",
+        maoDeObraParalisada: "",
+        comentarios: "",
+        total: "0h"
+      };
+    }
     detail[category] = { ...detail[category], ...fields };
     
     // Recalculate paralisacoes quantities
@@ -164,9 +216,9 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
     let paralisacoesCount = 0;
     Object.values(detail).forEach(r => {
       const rowItem = r as StoppageDetailRow;
-      if (rowItem.ativo) {
-        totalHoursCount += rowItem.horas.length;
-        if (rowItem.horas.length > 0) paralisacoesCount++;
+      if (rowItem && rowItem.ativo) {
+        totalHoursCount += (rowItem.horas || []).length;
+        if ((rowItem.horas || []).length > 0) paralisacoesCount++;
       }
     });
 
@@ -179,9 +231,17 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
     });
   };
 
-  const toggleHourStoppage = (category: "chuva" | "raios" | "projetos" | "vizinhos", hour: string) => {
-    const row = currentReport.paralisacoesDetalhe[category];
-    const currentHours = [...row.horas];
+  const toggleHourStoppage = (category: "chuva" | "raios" | "projetos" | "vizinhos" | "outros", hour: string) => {
+    const row = currentReport.paralisacoesDetalhe[category] || {
+      ativo: false,
+      horas: [],
+      frentes: "",
+      local: "",
+      maoDeObraParalisada: "",
+      comentarios: "",
+      total: "0h"
+    };
+    const currentHours = [...(row.horas || [])];
     const hourIdx = currentHours.indexOf(hour);
     if (hourIdx > -1) {
       currentHours.splice(hourIdx, 1);

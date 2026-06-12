@@ -876,9 +876,15 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
                           <td className="px-3.5 py-1.5 font-mono text-slate-500">{act.unidade || "-"}</td>
                           <td className="px-3.5 py-1.5 text-right">
                             <button
-                              onClick={() => handleRemoveActivity(act.id)}
-                              className="text-red-500 hover:text-red-750 font-bold"
+                              onClick={() => {
+                                if (window.confirm(`Deseja realmente excluir a atividade "${act.identificador} - ${act.descricao.substring(0, 40)}..."?`)) {
+                                  handleRemoveActivity(act.id);
+                                }
+                              }}
+                              className="inline-flex items-center gap-1 bg-red-50 hover:bg-red-100 text-red-650 px-2 py-1 rounded text-[10px] font-bold uppercase transition-colors shrink-0 outline-none select-none cursor-pointer"
+                              title="Excluir atividade do catálogo"
                             >
+                              <Trash2 className="w-3 h-3 text-red-650" />
                               Excluir
                             </button>
                           </td>

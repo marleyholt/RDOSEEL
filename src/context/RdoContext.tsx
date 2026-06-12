@@ -388,25 +388,10 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedAt: new Date().toISOString(),
     };
 
-    const removeUndefined = (obj: any): any => {
-      if (Array.isArray(obj)) {
-        return obj.map(item => removeUndefined(item));
-      } else if (obj !== null && typeof obj === "object") {
-        const cleaned: any = {};
-        for (const [key, value] of Object.entries(obj)) {
-          if (value !== undefined) {
-            cleaned[key] = removeUndefined(value);
-          }
-        }
-        return cleaned;
-      }
-      return obj;
-    };
-
     if (activeIsFirebase && db) {
       const path = "rdos";
       try {
-        const cleanedReport = removeUndefined(reportToSave);
+        const cleanedReport = JSON.parse(JSON.stringify(reportToSave));
         if (cleanedReport.id) {
           const docRef = doc(db, path, cleanedReport.id);
           await setDoc(docRef, cleanedReport);
@@ -804,25 +789,10 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedAt: new Date().toISOString(),
     };
 
-    const removeUndefined = (obj: any): any => {
-      if (Array.isArray(obj)) {
-        return obj.map(item => removeUndefined(item));
-      } else if (obj !== null && typeof obj === "object") {
-        const cleaned: any = {};
-        for (const [key, value] of Object.entries(obj)) {
-          if (value !== undefined) {
-            cleaned[key] = removeUndefined(value);
-          }
-        }
-        return cleaned;
-      }
-      return obj;
-    };
-
     if (activeIsFirebase && db) {
       const path = "obras";
       try {
-        const cleanedObra = removeUndefined(obraToSave);
+        const cleanedObra = JSON.parse(JSON.stringify(obraToSave));
         if (cleanedObra.id) {
           const docRef = doc(db, path, cleanedObra.id);
           await setDoc(docRef, cleanedObra);
