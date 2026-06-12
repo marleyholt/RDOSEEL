@@ -9,7 +9,15 @@ import { motion } from "motion/react";
 import { HardHat, LogIn, Mail, Lock, UserPlus, Info, AlertTriangle, CheckCircle } from "lucide-react";
 
 export const AuthScreen: React.FC = () => {
-  const { login, signup, isFirebase } = useRdoStore();
+  const { 
+    login, 
+    signup, 
+    loginWithGoogle, 
+    isFirebase, 
+    isLocalFallback, 
+    setIsLocalFallback 
+  } = useRdoStore();
+  
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -38,12 +46,42 @@ export const AuthScreen: React.FC = () => {
         setSuccess("Login efetuado com sucesso!");
       } else {
         await signup(email, password);
-        setSuccess("Conta criada com  sucesso! Bem-vindo!");
+        setSuccess("Conta criada com sucesso! Bem-vindo!");
       }
     } catch (err: any) {
       console.error(err);
+      
+      const isNotAllowedError = 
+        err?.code === "auth/operation-not-allowed" || 
+        err?.message?.includes("operation-not-allowed");
+
+      if (isNotAllowedError) {
+        setError(
+          "O provedor 'E-mail/senha' está desativado no Firebase para este projeto. " +
+          "Para ativá-lo, acesse o Console do Firebase (Authentication -> Sign-in Method) e ative o provedor de E-mail/Senha. " +
+          "Como alternativa, você pode Entrar com o Google ou continuar no Modo Offline Local abaixo."
+        );
+      } else {
+        setError(
+          err?.message || "Ocorreu um erro ao processar. Verifique os dados inseridos."
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setError(null);
+    setSuccess(null);
+    setLoading(true);
+    try {
+      await loginWithGoogle();
+      setSuccess("Login com Google realizado com sucesso!");
+    } catch (err: any) {
+      console.error(err);
       setError(
-        err?.message || "Ocorreu um erro ao processar. Verifique os dados inseridos."
+        "Falha ao entrar com Google. Se estiver no iFrame do AI Studio, utilize o botão 'Ativar Modo Offline Local' abaixo!"
       );
     } finally {
       setLoading(false);
@@ -57,8 +95,8 @@ export const AuthScreen: React.FC = () => {
           <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex gap-2 text-xs text-emerald-800 shadow-sm">
             <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold">Banco de Dados Ativo</p>
-              <p className="text-emerald-600 font-normal">Firebase autenticação e Firestore estão conectados com sucesso.</p>
+              <p className="font-semibold">Nuvem Firestore Ativa</p>
+              <p className="text-emerald-600 font-normal">Seus diários de obras são salvos na nuvem do Firebase com segurança.</p>
             </div>
           </div>
         ) : (
@@ -66,7 +104,7 @@ export const AuthScreen: React.FC = () => {
             <Info className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
             <div>
               <p className="font-semibold">Modo Offline Local Ativo</p>
-              <p className="text-amber-600 font-normal">O sandbox do Firebase precisa de aceitação de termos. Você pode usar qualquer email e senha para testar localmente!</p>
+              <p className="text-amber-600 font-normal">Armazenamento local ativo. Seus relatórios são salvos temporariamente no seu navegador!</p>
             </div>
           </div>
         )}
@@ -76,7 +114,7 @@ export const AuthScreen: React.FC = () => {
         {/* Brand visual header */}
         <div className="flex justify-center">
           <div className="bg-[#004899] text-white p-3 pr-4 rounded-xl flex items-center justify-center gap-2 shadow-md">
-            <HardHat className="w-8 h-8 animate-bounce" />
+            <HardHat className="w-8 h-8 " />
             <div className="text-left font-sans leading-none">
               <span className="font-bold text-lg tracking-wide block">RDO</span>
               <span className="text-[9px] uppercase tracking-wider text-blue-200">Diário de Obras</span>
@@ -109,7 +147,7 @@ export const AuthScreen: React.FC = () => {
           className="bg-white py-8 px-4 shadow-xl shadow-slate-200 border border-slate-100 rounded-2xl sm:px-10"
         >
           {error && (
-            <div className="mb-4 bg-red-50 border border-red-200 text-red-800 text-sm p-4 rounded-lg flex gap-2">
+            <div className="mb-4 bg-red-50 border border-red-200 text-red-800 text-sm p-4 rounded-lg flex gap-2 leading-relaxed">
               <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
@@ -185,26 +223,73 @@ export const AuthScreen: React.FC = () => {
                 ) : isLogin ? (
                   <>
                     <LogIn className="w-4 h-4 mr-2" />
-                    Entrar no Sistema
+                    Entrar com E-mail
                   </>
                 ) : (
                   <>
                     <UserPlus className="w-4 h-4 mr-2" />
-                    Criar Nova Conta
+                    Criar Conta com E-mail
                   </>
                 )}
               </button>
             </div>
           </form>
 
-          {!isFirebase && (
-            <div className="mt-6 bg-blue-50 border border-blue-100 rounded-xl p-3.5 flex gap-2">
-              <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-              <div className="text-xs text-blue-800 leading-relaxed">
-                <strong>Nota Comercial:</strong> Para ativar o salvamento em nuvem definitivo no Firestore com múltiplos usuários, finalize a aceitação de termos na aba Firebase do AI Studio. Enquanto isso, aproveite o aplicativo com salvamento automático local seguro!
-              </div>
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center" aria-hidden="true">
+              <div className="w-full border-t border-gray-200" />
             </div>
-          )}
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-gray-500 text-xs uppercase tracking-wider">Acesso Rápido</span>
+            </div>
+          </div>
+
+          <div>
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              disabled={loading}
+              className="w-full h-11 flex justify-center items-center py-2 px-4 border border-gray-300 rounded-lg shadow-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all cursor-pointer"
+            >
+              <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
+                <path
+                  fill="#EA4335"
+                  d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.114-5.136 4.114A5.99 5.99 0 0 1 8 12.5a5.99 5.99 0 0 1 5.99-6.013c1.47 0 2.8.513 3.84 1.51l3.011-3.013C18.95 3.19 16.59 2 13.99 2 8.18 2 3.5 6.7 3.5 12.5S8.18 23 13.99 23c5.78 0 10.51-4.7 10.51-10.5 0-.74-.067-1.465-.214-2.215H12.24z"
+                />
+              </svg>
+              Entrar com o Google
+            </button>
+          </div>
+
+          <div className="mt-6 pt-6 border-t border-gray-100 flex flex-col gap-3">
+            {!isFirebase ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsLocalFallback(false);
+                  setError(null);
+                  setSuccess(null);
+                }}
+                className="w-full py-2.5 px-4 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[#004899] text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <CheckCircle className="w-3.5 h-3.5 text-[#004899]" />
+                Reconectar com Nuvem (Firebase)
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsLocalFallback(true);
+                  setError(null);
+                  setSuccess(null);
+                }}
+                className="w-full py-2.5 px-4 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                Entrar no Modo Offline Local (Sem Conta)
+              </button>
+            )}
+          </div>
         </motion.div>
       </div>
 

@@ -24,7 +24,9 @@ import {
   createUserWithEmailAndPassword, 
   signOut, 
   onAuthStateChanged,
-  User 
+  User,
+  GoogleAuthProvider,
+  signInWithPopup
 } from "firebase/auth";
 import { 
   collection, 
@@ -42,11 +44,14 @@ interface RdoContextType {
   user: User | { uid: string; email: string } | null;
   isLoading: boolean;
   isFirebase: boolean;
+  isLocalFallback: boolean;
+  setIsLocalFallback: (fallback: boolean) => void;
   reports: RdoReport[];
   currentReport: RdoReport | null;
   setCurrentReport: (rdo: RdoReport | null) => void;
   login: (email: string, pass: string) => Promise<void>;
   signup: (email: string, pass: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   saveReport: (report: RdoReport) => Promise<void>;
   deleteReport: (id: string) => Promise<void>;
@@ -64,10 +69,20 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [reports, setReports] = useState<RdoReport[]>([]);
   const [currentReport, setCurrentReport] = useState<RdoReport | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [useLocalFallback, setUseLocalFallbackState] = useState(() => {
+    return localStorage.getItem("rdo_use_local_mode") === "true";
+  });
+
+  const setIsLocalFallback = (fallback: boolean) => {
+    localStorage.setItem("rdo_use_local_mode", fallback ? "true" : "false");
+    setUseLocalFallbackState(fallback);
+  };
+
+  const activeIsFirebase = isFirebaseConfigured && !useLocalFallback;
 
   // Auth State
   useEffect(() => {
-    if (isFirebaseConfigured && auth) {
+    if (activeIsFirebase && auth) {
       const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
         if (firebaseUser) {
           setUser(firebaseUser);
@@ -89,7 +104,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       setIsLoading(false);
     }
-  }, []);
+  }, [activeIsFirebase]);
 
   // Fetch Reports when User changes
   useEffect(() => {
@@ -101,7 +116,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    if (isFirebaseConfigured && db) {
+    if (activeIsFirebase && db) {
       const fetchFirebaseReports = async () => {
         setIsLoading(true);
         const path = "rdos";
@@ -124,6 +139,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           console.error("Firebase fetch failed, falling back to local:", error);
           // Fallback parsing local storage
           loadLocalReports();
+          handleFirestoreError(error, OperationType.LIST, path);
         } finally {
           setIsLoading(false);
         }
@@ -132,7 +148,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } else {
       loadLocalReports();
     }
-  }, [user, isLoading]);
+  }, [user, isLoading, activeIsFirebase]);
 
   const loadLocalReports = () => {
     const raw = localStorage.getItem(LOCAL_REPORTS_KEY);
@@ -157,7 +173,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Auth Operations
   const login = async (email: string, pass: string) => {
-    if (isFirebaseConfigured && auth) {
+    if (activeIsFirebase && auth) {
       await signInWithEmailAndPassword(auth, email, pass);
     } else {
       // Local Mock Login
@@ -168,7 +184,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const signup = async (email: string, pass: string) => {
-    if (isFirebaseConfigured && auth) {
+    if (activeIsFirebase && auth) {
       await createUserWithEmailAndPassword(auth, email, pass);
     } else {
       // Local Mock Signup
@@ -178,8 +194,20 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const loginWithGoogle = async () => {
+    if (activeIsFirebase && auth) {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } else {
+      // Local Mock Google Login
+      const mockUser = { uid: "demo-user-google", email: "google-user@seel.com.br" };
+      localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(mockUser));
+      setUser(mockUser);
+    }
+  };
+
   const logout = async () => {
-    if (isFirebaseConfigured && auth) {
+    if (activeIsFirebase && auth) {
       await signOut(auth);
     } else {
       localStorage.removeItem(LOCAL_USER_KEY);
@@ -197,7 +225,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedAt: new Date().toISOString(),
     };
 
-    if (isFirebaseConfigured && db) {
+    if (activeIsFirebase && db) {
       const path = "rdos";
       try {
         if (reportToSave.id) {
@@ -237,7 +265,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteReport = async (id: string) => {
     if (!user) throw new Error("Usuário não autenticado");
 
-    if (isFirebaseConfigured && db) {
+    if (activeIsFirebase && db) {
       const path = `rdos/${id}`;
       try {
         await deleteDoc(doc(db, "rdos", id));
@@ -412,12 +440,15 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <RdoContext.Provider value={{
       user,
       isLoading,
-      isFirebase: isFirebaseConfigured,
+      isFirebase: activeIsFirebase,
+      isLocalFallback: useLocalFallback,
+      setIsLocalFallback,
       reports,
       currentReport,
       setCurrentReport,
       login,
       signup,
+      loginWithGoogle,
       logout,
       saveReport,
       deleteReport,
