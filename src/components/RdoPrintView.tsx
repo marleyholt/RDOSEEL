@@ -162,11 +162,15 @@ export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, onClose }) =
         <span className="font-bold text-gray-800">{formatPrintDate(report.data)}</span>
       </div>
 
-      <div className="col-span-6 p-1.5 flex items-center">
+      <div className="col-span-4 p-1.5 flex items-center">
         <span className="font-bold text-gray-500 uppercase mr-1">CLIENTE:</span>
         <span className="font-semibold text-gray-800">{report.cliente}</span>
       </div>
-      <div className="col-span-6 p-1.5 flex items-center">
+      <div className="col-span-4 p-1.5 flex items-center">
+        <span className="font-bold text-gray-500 uppercase mr-1">CONTRATADA:</span>
+        <span className="font-bold text-gray-800">{report.contratada || "SEEL ENGENHARIA"}</span>
+      </div>
+      <div className="col-span-4 p-1.5 flex items-center">
         <span className="font-bold text-gray-500 uppercase mr-1">GESTOR:</span>
         <span className="font-semibold text-gray-800">{report.gestor}</span>
       </div>

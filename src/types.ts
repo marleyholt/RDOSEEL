@@ -106,6 +106,7 @@ export interface RdoReport {
   obraId?: string; // Links to the ObraConfig
   status?: "Em Digitação" | "Finalizado";
   cliente: string;
+  contratada?: string; // Main contractor (e.g., SEEL)
   gestor: string;
   gerenciadora: string;
   prazo: number;
@@ -166,6 +167,7 @@ export interface ObraConfig {
   nome: string;
   numeroContrato: string;
   cliente: string;
+  contratada?: string; // Main contractor (e.g., SEEL)
   gerenciadora: string;
   dataInicio: string; // YYYY-MM-DD
   prazoContratual: number; // in days

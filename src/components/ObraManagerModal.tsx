@@ -15,7 +15,8 @@ import {
   Layers,
   Building2,
   FileSpreadsheet,
-  AlertTriangle
+  AlertTriangle,
+  Download
 } from "lucide-react";
 
 interface ObraManagerModalProps {
@@ -30,6 +31,7 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
   const [nome, setNome] = useState("");
   const [numeroContrato, setNumeroContrato] = useState("");
   const [cliente, setCliente] = useState("");
+  const [contratada, setContratada] = useState("SEEL SERVIÇOS DE ENGENHARIA LTDA");
   const [gerenciadora, setGerenciadora] = useState("");
   const [dataInicio, setDataInicio] = useState("");
   const [prazoContratual, setPrazoContratual] = useState<number>(0);
@@ -63,6 +65,7 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
       setNome("");
       setNumeroContrato("");
       setCliente("");
+      setContratada("SEEL SERVIÇOS DE ENGENHARIA LTDA");
       setGerenciadora("");
       setDataInicio(new Date().toISOString().split("T")[0]);
       setPrazoContratual(365);
@@ -78,6 +81,7 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
         setNome(idx.nome || "");
         setNumeroContrato(idx.numeroContrato || "");
         setCliente(idx.cliente || "");
+        setContratada(idx.contratada || "SEEL SERVIÇOS DE ENGENHARIA LTDA");
         setGerenciadora(idx.gerenciadora || "");
         setDataInicio(idx.dataInicio || "");
         setPrazoContratual(idx.prazoContratual || 0);
@@ -122,6 +126,119 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  // Download XLS template
+  const handleDownloadTemplate = () => {
+    try {
+      import("xlsx").then((XLSX) => {
+        const data = [
+          ["Referencia", "Fase", "CodigoDP", "Descricao", "Unidade"],
+          ["001", "ATIVIDADES - FASE 01 - REDE EXTERNA", "3.2", "Demolicao manual concreto armado (pilar / viga / laje)", "m³"],
+          ["002", "ATIVIDADES - FASE 01 - REDE EXTERNA", "3.6", "Aterro apiloado (manual) em camadas de 20 cm", "m³"],
+          ["003", "ATIVIDADES - GERÊNCIA", "1.1", "Engenheiro ou Arquiteto auxiliar/júnior de obra", "un"],
+          ["004", "ATIVIDADES - FASE 12 - COND. REAL PARK", "3.4", "Demolição de lastro de concreto simples", "m³"],
+          ["005", "ATIVIDADES - ADMINISTRAÇÃO CONTRATUAL", "4.2", "Concreto magro E=5cm, preparo com betoneira", "m²"]
+        ];
+        const worksheet = XLSX.utils.aoa_to_sheet(data);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Modelo_PQ_SEEL");
+        XLSX.writeFile(workbook, "Modelo_Planilha_PQ_SEEL.xlsx");
+      }).catch(err => {
+        alert("Erro ao carregar o gerador de planilhas Excel.");
+        console.error(err);
+      });
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao gerar modelo excel.");
+    }
+  };
+
+  // Parsing uploaded file
+  const handleExcelImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        import("xlsx").then((XLSX) => {
+          const bstr = evt.target?.result;
+          const workbook = XLSX.read(bstr, { type: "binary" });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          
+          const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          if (rows.length <= 1) {
+            alert("A planilha está vazia ou não possui cabeçalhos.");
+            return;
+          }
+
+          const headers = rows[0].map((h: any) => 
+            String(h || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+          );
+
+          const refIdx = headers.findIndex((h: string) => h.includes("ref") || h.includes("item"));
+          const faseIdx = headers.findIndex((h: string) => h.includes("fas") || h.includes("grup"));
+          const codIdx = headers.findIndex((h: string) => h.includes("cod") || h.includes("ident"));
+          const descIdx = headers.findIndex((h: string) => h.includes("desc") || h.includes("serv") || h.includes("ativ"));
+          const uniIdx = headers.findIndex((h: string) => h.includes("uni") || h.includes("und"));
+
+          const finalRefIdx = refIdx !== -1 ? refIdx : 0;
+          const finalFaseIdx = faseIdx !== -1 ? faseIdx : 1;
+          const finalCodIdx = codIdx !== -1 ? codIdx : 2;
+          const finalDescIdx = descIdx !== -1 ? descIdx : 3;
+          const finalUniIdx = uniIdx !== -1 ? uniIdx : 4;
+
+          const parsedActivities: ObraActivity[] = [];
+          for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            if (!row || row.length === 0) continue;
+
+            const rawRef = String(row[finalRefIdx] || `idx-${i}`).trim();
+            const rawFase = String(row[finalFaseIdx] || "FASE GERAL").trim().toUpperCase();
+            const rawCod = String(row[finalCodIdx] || "").trim();
+            const rawDesc = String(row[finalDescIdx] || "").trim();
+            const rawUni = String(row[finalUniIdx] || "un").trim();
+
+            if (!rawDesc) continue;
+
+            parsedActivities.push({
+              id: "xlsx-" + Math.random().toString(36).substr(2, 9),
+              ref: rawRef,
+              fase: rawFase,
+              identificador: rawCod,
+              descricao: rawDesc,
+              unidade: rawUni
+            });
+          }
+
+          if (parsedActivities.length === 0) {
+            alert("Nenhum item de atividade válido foi localizado na planilha. Altere as colunas.");
+            return;
+          }
+
+          const confirmAppend = window.confirm(
+            `Carregamos ${parsedActivities.length} atividades da sua planilha.\n\nClique em [OK/Confirmar] para ADICIONAR ao catálogo atual de ${atividades.length} itens.\nClique em [Cancelar] para SUBSTITUIR o catálogo atual existente.`
+          );
+
+          if (confirmAppend) {
+            setAtividades(prev => [...prev, ...parsedActivities]);
+          } else {
+            setAtividades(parsedActivities);
+          }
+
+          setMessage({ 
+            text: `Importado ${parsedActivities.length} itens da planilha excel com sucesso! Lembre-se de clicar no botão "Salvar Alterações" no rodapé para consolidar!`, 
+            type: "success" 
+          });
+        });
+      } catch (err: any) {
+        alert("Erro ao ler dados do arquivo: " + err.message);
+      }
+    };
+    reader.readAsBinaryString(file);
+    e.target.value = "";
   };
 
   const calculateEndDate = (start: string, duration: number, extra: number): string => {
@@ -203,8 +320,8 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
 
   // Save the full Obra details
   const handleSaveObraConfig = async () => {
-    if (!nome.trim() || !cliente.trim() || !gerenciadora.trim()) {
-      setMessage({ text: "Nome da Obra, Cliente e Gerenciadora são campos obrigatórios.", type: "error" });
+    if (!nome.trim() || !cliente.trim() || !contratada.trim() || !gerenciadora.trim()) {
+      setMessage({ text: "Nome da Obra, Cliente, Contratada (SEEL) e Gerenciadora são campos obrigatórios.", type: "error" });
       return;
     }
 
@@ -214,6 +331,7 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
       nome: nome.trim().toUpperCase(),
       numeroContrato: numeroContrato.trim(),
       cliente: cliente.trim().toUpperCase(),
+      contratada: contratada.trim().toUpperCase(),
       gerenciadora: gerenciadora.trim().toUpperCase(),
       dataInicio,
       prazoContratual: Number(prazoContratual || 0),
@@ -333,7 +451,7 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
               </h4>
 
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
+                <div className="space-y-1 font-sans">
                   <label className="text-[10px] text-slate-500 font-bold uppercase">Nome Completo da Obra *</label>
                   <input
                     type="text"
@@ -367,6 +485,17 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
                 </div>
 
                 <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase">Empresa Contratada *</label>
+                  <input
+                    type="text"
+                    value={contratada}
+                    onChange={(e) => setContratada(e.target.value)}
+                    placeholder="Ex: SEEL SERVIÇOS DE ENGENHARIA LTDA"
+                    className="w-full bg-white border border-slate-300 rounded p-2 text-xs focus:ring-1 focus:ring-amber-500 outline-none font-bold text-slate-700"
+                  />
+                </div>
+
+                <div className="space-y-1 col-span-2">
                   <label className="text-[10px] text-slate-500 font-bold uppercase">Gerenciadora Fiscal *</label>
                   <input
                     type="text"
@@ -625,11 +754,37 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
             </section>
 
             {/* SECT 6: PLANILHA DE QUANTIDADES (PQ) ACTIVIDADES */}
-            <section className="bg-slate-50/50 p-4 rounded-xl border border-slate-200 space-y-4">
-              <h4 className="font-bold text-xs text-slate-800 uppercase tracking-wide flex items-center gap-1.5 border-b border-slate-200 pb-1.5">
-                <FileSpreadsheet className="w-4 h-4 text-slate-500" />
-                6. Importar/Cadastrar Planilha de Quantidades da Obra (PQ)
-              </h4>
+            <section className="bg-slate-50/50 p-4 rounded-xl border border-slate-200 space-y-4 font-sans">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-2">
+                <h4 className="font-bold text-xs text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                  <FileSpreadsheet className="w-4 h-4 text-slate-500" />
+                  6. Planilha de Quantidades da Obra (PQ)
+                </h4>
+                
+                {/* Excel Integration block */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDownloadTemplate}
+                    className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-[10px] font-bold rounded flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Baixe o modelo pré-formatado de planilha Excel para importar rápido suas atividades"
+                  >
+                    <Download className="w-3.5 h-3.5 text-slate-600" />
+                    Planilha Modelo
+                  </button>
+                  
+                  <label className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded flex items-center gap-1.5 transition-colors cursor-pointer border border-emerald-705 shadow-xs shrink-0">
+                    <Upload className="w-3.5 h-3.5 text-white" />
+                    Carregar Planilha (XLSX)
+                    <input
+                      type="file"
+                      accept=".xlsx, .xls"
+                      onChange={handleExcelImport}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
 
               <div className="bg-white border rounded-xl p-4 gap-3 grid grid-cols-5 items-end text-slate-700">
                 <div className="space-y-1">

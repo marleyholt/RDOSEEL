@@ -36,7 +36,7 @@ interface RdoEditorProps {
 }
 
 export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
-  const { currentReport, saveReport, isFirebase } = useRdoStore();
+  const { currentReport, saveReport, isFirebase, obras } = useRdoStore();
   const [activeTab, setActiveTab] = useState<"geral" | "atividades" | "paralisacoes" | "efetivo" | "equipamentos">("geral");
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -118,16 +118,26 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
 
   // Activities Operations
   const handleAddActivity = () => {
-    const nextRef = (currentReport.atividades.length + 1).toString().padStart(3, "0");
+    const associatedObra = obras.find(o => o.id === currentReport.obraId || o.nome === currentReport.obra);
+    const registered = associatedObra ? associatedObra.atividades : [];
+    
+    if (!registered || registered.length === 0) {
+      alert("ATENÇÃO: Não há atividades (PQ) cadastradas no Gerenciador para esta Obra.\n\nPor favor, salve seu progresso atual, abra o painel 'Gerenciar Obras' no menu superior esquerdo, e cadastre ou importe as atividades da obra primeiro para poder usá-las aqui.");
+      return;
+    }
+
+    const defaultAct = registered[0];
     const newAct: Activity = {
-      id: "act-added-" + Date.now(),
-      ref: nextRef,
-      fase: "ATIVIDADES - FASE 01 - REDE EXTERNA",
-      identificador: "1.1",
-      descricao: "Nova atividade descritiva do diário...",
-      intervalo: "E+m",
-      total: "0"
+      id: "act-added-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
+      ref: defaultAct.ref || "001",
+      fase: defaultAct.fase,
+      identificador: defaultAct.identificador,
+      descricao: defaultAct.descricao,
+      intervalo: defaultAct.unidade || "un",
+      total: "0",
+      comentario: ""
     };
+    
     updateReport({
       atividades: [...currentReport.atividades, newAct]
     });
@@ -192,43 +202,6 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
     });
   };
 
-  // Weather mm edits
-  const handleRainMmChange = (hour: string, value: number) => {
-    const updatedRain = { ...currentReport.chuvaMmPorHora };
-    updatedRain[hour] = value;
-
-    // Recalculate period totals
-    let manhaTotal = 0; // 6h to 11h
-    let tardeTotal = 0; // 12h to 17h
-    let noiteTotal = 0; // 18h to 5h
-    
-    Object.entries(updatedRain).forEach(([h, val]) => {
-      const num = Number(h.replace("h", ""));
-      const weight = Number(val || 0);
-      if (num >= 6 && num <= 11) {
-        manhaTotal += weight;
-      } else if (num >= 12 && num <= 17) {
-        tardeTotal += weight;
-      } else {
-        noiteTotal += weight;
-      }
-    });
-
-    const sumTotal = Number((manhaTotal + tardeTotal + noiteTotal).toFixed(2));
-
-    updateReport({
-      chuvaMmPorHora: updatedRain,
-      precipitacao: {
-        ...currentReport.precipitacao,
-        manha: Number(manhaTotal.toFixed(2)),
-        tarde: Number(tardeTotal.toFixed(2)),
-        noite: Number(noiteTotal.toFixed(2)),
-        total: sumTotal,
-        acumuladoMes: sumTotal
-      }
-    });
-  };
-
   // Detailed Labor Operations
   const handleUpdateLaborItem = (groupIndex: number, itemIndex: number, fields: Partial<any>) => {
     const updatedGrid = [...currentReport.efetivoDetalhado];
@@ -270,6 +243,42 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
     const group = { ...updatedGrid[groupIndex] };
     group.items = group.items.filter((_, i) => i !== itemIndex);
     updatedGrid[groupIndex] = group;
+    updateReport({ efetivoDetalhado: updatedGrid });
+  };
+
+  const handleAddSubcontractorGroup = (name: string) => {
+    if (!name.trim()) return;
+    const exists = currentReport.efetivoDetalhado.some(g => g.nome.toUpperCase() === name.trim().toUpperCase());
+    if (exists) {
+      alert("Subcontratada já adicionada ao efetivo deste diário.");
+      return;
+    }
+    const newGroup = {
+      id: "sub-gp-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
+      nome: name.trim().toUpperCase(),
+      items: [
+        {
+          id: "labor-itm-" + Date.now() + "-1",
+          cargo: "Servante / Auxiliar Técnico",
+          c: 0,
+          f: 0,
+          a: 0,
+          t: 0,
+          moiMod: "MOD" as const
+        }
+      ]
+    };
+    updateReport({
+      efetivoDetalhado: [...currentReport.efetivoDetalhado, newGroup]
+    });
+  };
+
+  const handleDeleteSubcontractorGroup = (groupIndex: number) => {
+    const groupName = currentReport.efetivoDetalhado[groupIndex]?.nome || "";
+    const confirmDelete = window.confirm(`Deseja realmente remover a subcontratada "${groupName}" e todas as suas funções correspondentes deste RDO?`);
+    if (!confirmDelete) return;
+
+    const updatedGrid = currentReport.efetivoDetalhado.filter((_, i) => i !== groupIndex);
     updateReport({ efetivoDetalhado: updatedGrid });
   };
 
@@ -490,6 +499,17 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
               </div>
 
               <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-tight mb-1">Empresa Contratada</label>
+                <input
+                  type="text"
+                  value={currentReport.contratada || ""}
+                  onChange={(e) => updateReport({ contratada: e.target.value })}
+                  className="block h-8 w-full rounded border-slate-300 text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-slate-50/40 hover:bg-slate-50/10 transition-colors font-bold text-slate-700"
+                  placeholder="SEEL SERVIÇOS DE ENGENHARIA LTDA"
+                />
+              </div>
+
+              <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-tight mb-1">Gestor Responsável</label>
                 <input
                   type="text"
@@ -570,115 +590,118 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
         )}
 
         {/* ================== TAB: ATIVIDADES ================== */}
-        {activeTab === "atividades" && (
-          <div className="space-y-5 animate-fade-in">
-            <div className="flex justify-between items-center border-b border-slate-200 pb-1.5 matches-pattern">
-              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Fases e Atividades Executadas (Anexar Fotos)</h3>
-              <button
-                onClick={handleAddActivity}
-                className="flex items-center gap-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase tracking-wider px-3 h-8 rounded transition-colors shadow-xs"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Adicionar Atividade
-              </button>
-            </div>
+        {activeTab === "atividades" && (() => {
+          const associatedObra = obras.find(o => o.id === currentReport.obraId || o.nome === currentReport.obra);
+          const registered = associatedObra?.atividades || [];
 
-            {currentReport.atividades && currentReport.atividades.length > 0 ? (
-              <div className="space-y-4">
-                {currentReport.atividades.map((act, idx) => (
-                  <div key={act.id || idx} className="bg-white p-4 rounded border border-slate-200 shadow-xs space-y-3">
-                    <div className="flex flex-wrap gap-2.5 items-center justify-between">
-                      <div className="flex gap-2 items-center flex-1">
-                        <span className="font-mono text-xs font-bold text-amber-700 bg-amber-500/10 h-8 w-10 flex items-center justify-center rounded">
-                          #{idx + 1}
-                        </span>
-                        
-                        <div className="w-48">
-                          <select
-                            value={act.fase}
-                            onChange={(e) => handleUpdateActivity(idx, { fase: e.target.value })}
-                            className="block w-full h-8 rounded border-slate-300 text-xs text-slate-800 py-0.5 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-slate-50/20"
+          return (
+            <div className="space-y-5 animate-fade-in font-sans">
+              <div className="flex justify-between items-center border-b border-slate-200 pb-1.5 matches-pattern">
+                <div>
+                  <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Fases e Atividades Executadas (Anexar Fotos)</h3>
+                  <p className="text-[10px] text-slate-400">Selecione apenas as atividades do PQ contratual cadastradas no Gerenciador de Obras</p>
+                </div>
+                <button
+                  onClick={handleAddActivity}
+                  className="flex items-center gap-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase tracking-wider px-3 h-8 rounded transition-colors shadow-xs cursor-pointer shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Adicionar Atividade
+                </button>
+              </div>
+
+              {currentReport.atividades && currentReport.atividades.length > 0 ? (
+                <div className="space-y-4">
+                  {currentReport.atividades.map((act, idx) => {
+                    // Match with a registered activity
+                    const matchedAct = registered.find(
+                      r => r.ref === act.ref && r.identificador === act.identificador
+                    ) || registered.find(
+                      r => r.descricao === act.descricao
+                    ) || registered[0];
+
+                    return (
+                      <div key={act.id || idx} className="bg-white p-4 rounded border border-slate-205 shadow-xs space-y-3">
+                        <div className="flex flex-wrap gap-2.5 items-center justify-between">
+                          <div className="flex flex-wrap gap-3 items-center flex-1">
+                            <span className="font-mono text-xs font-bold text-amber-700 bg-amber-500/10 h-8 w-10 flex items-center justify-center rounded shrink-0">
+                              #{idx + 1}
+                            </span>
+                            
+                            {/* Registered Activities dropdown */}
+                            <div className="flex-1 min-w-[280px]">
+                              <select
+                                value={matchedAct?.id || ""}
+                                onChange={(e) => {
+                                  const found = registered.find(r => r.id === e.target.value);
+                                  if (found) {
+                                    handleUpdateActivity(idx, {
+                                      ref: found.ref || "001",
+                                      fase: found.fase,
+                                      identificador: found.identificador,
+                                      descricao: found.descricao,
+                                      intervalo: found.unidade || "un"
+                                    });
+                                  }
+                                }}
+                                className="block w-full h-8.5 rounded border-amber-200 text-xs text-slate-800 font-bold focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-amber-500/5 hover:bg-amber-500/10 transition-colors"
+                              >
+                                {registered.length > 0 ? (
+                                  registered.map((r) => (
+                                    <option key={r.id} value={r.id}>
+                                      [{r.identificador || r.ref}] - {r.descricao.substring(0, 100)}{r.descricao.length > 100 ? "..." : ""} ({r.unidade || "-"})
+                                    </option>
+                                  ))
+                                ) : (
+                                  <option value="">Nenhuma atividade cadastrada. Acesse o Gerenciador de Obras.</option>
+                                )}
+                              </select>
+                            </div>
+                          </div>
+                          
+                          <button
+                            onClick={() => handleDeleteActivity(idx)}
+                            className="text-red-500 hover:text-red-750 bg-red-50 hover:bg-red-100 p-2 rounded transition-colors cursor-pointer"
+                            title="Deletar atividade"
                           >
-                            {phaseCategories.map((f) => (
-                              <option key={f} value={f}>{f}</option>
-                            ))}
-                          </select>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
 
-                        <div className="w-24">
-                          <input
-                            type="text"
-                            value={act.ref}
-                            onChange={(e) => handleUpdateActivity(idx, { ref: e.target.value })}
-                            className="block w-full h-8 rounded border-slate-300 text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-slate-50/20"
-                            placeholder="Ref (ex 001)"
-                          />
+                        {/* Read-only beautiful tags block representing active catalogue data */}
+                        <div className="bg-slate-50 p-2.5 rounded border border-slate-200 text-xs text-slate-700 leading-relaxed font-sans">
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[9px] text-slate-400 font-bold mb-1.5 uppercase tracking-wide">
+                            <span>Fase / Setor: <strong className="text-slate-600">{act.fase}</strong></span>
+                            <span>Item Ref: <strong className="text-slate-600">{act.ref}</strong></span>
+                            <span>Código DP: <strong className="text-slate-600 font-mono">{act.identificador}</strong></span>
+                            <span>Unidade: <strong className="text-slate-600 font-mono">{act.intervalo}</strong></span>
+                          </div>
+                          <p className="text-slate-800 font-semibold leading-relaxed">{act.descricao || "Selecione uma atividade para exibir sua especificação de diário."}</p>
                         </div>
 
-                        <div className="w-28">
-                          <input
-                            type="text"
-                            value={act.identificador}
-                            onChange={(e) => handleUpdateActivity(idx, { identificador: e.target.value })}
-                            className="block w-full h-8 rounded border-slate-300 text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-slate-50/20"
-                            placeholder="Identificador (ex 4.2)"
-                          />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-tight">Metragem / Total do Dia ({act.intervalo || "Un"}) *</label>
+                            <input
+                              type="text"
+                              value={act.total}
+                              onChange={(e) => handleUpdateActivity(idx, { total: e.target.value })}
+                              className="mt-1 block h-8 w-full rounded border-slate-300 text-xs text-slate-850 font-bold focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-slate-50/20 font-mono"
+                              placeholder="ex: 15.5"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-tight">Comentários Especiais do Dia</label>
+                            <input
+                              type="text"
+                              value={act.comentario || ""}
+                              onChange={(e) => handleUpdateActivity(idx, { comentario: e.target.value })}
+                              className="mt-1 block h-8 w-full rounded border-slate-300 text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-slate-50/20"
+                              placeholder="Comentar equipe envolvida, trecho exato, etc."
+                            />
+                          </div>
                         </div>
-                      </div>
-                      <button
-                        onClick={() => handleDeleteActivity(idx)}
-                        className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-2 rounded transition-colors"
-                        title="Deletar atividade"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-tight">Descrição Prática do Serviço</label>
-                      <textarea
-                        value={act.descricao}
-                        onChange={(e) => handleUpdateActivity(idx, { descricao: e.target.value })}
-                        rows={2}
-                        className="mt-1 block w-full rounded border-slate-300 shadow-xs focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-xs text-slate-850 bg-slate-50/20"
-                        placeholder="Ex: Escavação mecânica..."
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-tight">Unidade Intervalo</label>
-                        <input
-                          type="text"
-                          value={act.intervalo}
-                          onChange={(e) => handleUpdateActivity(idx, { intervalo: e.target.value })}
-                          className="mt-1 block h-8 w-full rounded border-slate-300 text-xs text-slate-850 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-slate-50/20"
-                          placeholder="E+m"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-tight">Metragem / Total do Dia</label>
-                        <input
-                          type="text"
-                          value={act.total}
-                          onChange={(e) => handleUpdateActivity(idx, { total: e.target.value })}
-                          className="mt-1 block h-8 w-full rounded border-slate-300 text-xs text-slate-850 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-slate-50/20 font-mono"
-                          placeholder="15"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-tight">Comentários Especiais</label>
-                        <input
-                          type="text"
-                          value={act.comentario || ""}
-                          onChange={(e) => handleUpdateActivity(idx, { comentario: e.target.value })}
-                          className="mt-1 block h-8 w-full rounded border-slate-300 text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-slate-50/20"
-                          placeholder="Opcional..."
-                        />
-                      </div>
-                    </div>
 
                     {/* PHOTO ATTACHMENT DRAG AND DROP / SELECTION */}
                     <div className="space-y-1.5 pt-1">
@@ -764,7 +787,8 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
                       </div>
                     </div>
                   </div>
-                ))}
+                );
+              })}
               </div>
             ) : (
               <div className="bg-white rounded-xl border border-gray-200 p-8 text-center italic text-gray-500">
@@ -772,7 +796,8 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
               </div>
             )}
           </div>
-        )}
+          );
+        })()}
 
         {/* ================== TAB: PARALISAÇÕES & CLIMA ================== */}
         {activeTab === "paralisacoes" && (
@@ -883,52 +908,38 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
             </div>
 
             <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1.5 pt-2">Índices de Pluviometria & Precipitação (mm)</h3>
-            <div className="bg-white p-3.5 rounded border border-slate-200 shadow-xs space-y-4">
-              <div>
-                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Inserir milímetros de chuva por hora do dia:</span>
-                <div className="grid grid-cols-4 sm:grid-cols-8 gap-2.5">
-                  {HOURS_LIST.map((hour) => {
-                    const mmVal = currentReport.chuvaMmPorHora[hour] || 0;
-                    return (
-                      <div key={hour} className="flex flex-col items-center bg-slate-50 border border-slate-200 rounded p-1 focus-within:border-amber-400">
-                        <span className="text-[9px] text-slate-500 font-mono font-bold leading-none">{hour}</span>
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          value={mmVal || ""}
-                          onChange={(e) => handleRainMmChange(hour, Number(e.target.value))}
-                          className="mt-1 block w-14 h-7 text-center font-mono text-xs rounded border-slate-300 p-0 text-slate-800 focus:border-amber-500 focus:ring-0"
-                          placeholder="-"
-                        />
-                      </div>
-                    );
-                  })}
+            <div className="bg-white p-4 rounded border border-slate-200 shadow-xs space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase">Milímetros Totais de Chuva Registrados Neste Dia (mm) *</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={currentReport.precipitacao.total}
+                    onChange={(e) => updateReport({ 
+                      precipitacao: { ...currentReport.precipitacao, total: Number(e.target.value) } 
+                    })}
+                    className="mt-1 block h-9 w-full rounded border-slate-300 text-xs text-slate-850 font-extrabold focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-mono bg-slate-50/20"
+                    placeholder="Ex: 12.5"
+                  />
+                  <p className="text-[9.5px] text-slate-400 mt-1">Informe quantos milímetros de precipitação total de chuva ocorreram neste dia contratual.</p>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3 border-t border-slate-100">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase">Precipitação Acumulada no Mês Anterior (mm)</label>
                   <input
                     type="number"
+                    step="0.1"
+                    min="0"
                     value={currentReport.precipitacao.acumuladoMesAnterior}
                     onChange={(e) => updateReport({ 
                       precipitacao: { ...currentReport.precipitacao, acumuladoMesAnterior: Number(e.target.value) } 
                     })}
-                    className="mt-1 block h-8 w-full rounded border-slate-300 text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-mono bg-slate-50/20"
-                    placeholder="55.8"
+                    className="mt-1 block h-9 w-full rounded border-slate-300 text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-mono bg-slate-50/20"
+                    placeholder="Ex: 55.8"
                   />
-                </div>
-
-                <div className="bg-amber-50/40 p-2 text-amber-900 border border-amber-200 rounded flex items-center justify-between col-span-2">
-                  <div className="text-xs">
-                    <p className="font-bold uppercase text-[10px] text-amber-800 tracking-wider">Acumulado do Diário Deste Dia:</p>
-                    <p className="text-[10px] text-amber-600/90 font-medium">Soma automática e consolidada de todas as medições de chuva acima.</p>
-                  </div>
-                  <div className="text-right bg-amber-500/10 border border-amber-200 font-bold font-mono text-base text-amber-700 rounded px-4 py-1">
-                    {currentReport.precipitacao.total} mm
-                  </div>
+                  <p className="text-[9.5px] text-slate-400 mt-1">Índice pluviométrico acumulado de chuva do mês anterior.</p>
                 </div>
               </div>
             </div>
@@ -936,32 +947,83 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
         )}
 
         {/* ================== TAB: EFETIVO ================== */}
-        {activeTab === "efetivo" && (
-          <div className="space-y-5 animate-fade-in">
-            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1.5">Quadro de Efetivo de Obra</h3>
-            
-            <div className="space-y-4">
-              {currentReport.efetivoDetalhado.map((group, gIdx) => (
-                <div key={group.id} className="bg-white rounded border border-slate-200 overflow-hidden shadow-xs">
-                  <div className="bg-slate-900 px-3.5 py-2 flex justify-between items-center text-white">
-                    <input
-                      type="text"
-                      value={group.nome}
-                      onChange={(e) => {
-                        const updated = [...currentReport.efetivoDetalhado];
-                        updated[gIdx] = { ...updated[gIdx], nome: e.target.value };
-                        updateReport({ efetivoDetalhado: updated });
-                      }}
-                      className="bg-transparent border-none text-xs font-bold w-2/3 text-white focus:ring-0 p-0 hover:bg-slate-800/10 transition-colors"
-                    />
-                    <button
-                      onClick={() => handleAddLaborRow(gIdx)}
-                      className="flex items-center gap-1 bg-amber-600 hover:bg-amber-700 text-white rounded font-bold text-[9px] uppercase tracking-wider px-2 py-1 border-none cursor-pointer duration-150 transition-colors"
-                    >
-                      <Plus className="w-3 h-3" />
-                      Adicionar Função
-                    </button>
-                  </div>
+        {activeTab === "efetivo" && (() => {
+          const associatedObra = obras.find(o => o.id === currentReport.obraId || o.nome === currentReport.obra);
+          const registeredSubs = associatedObra?.subcontratadas || [];
+          
+          return (
+            <div className="space-y-5 animate-fade-in font-sans">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-1.5 matches-pattern">
+                <div>
+                  <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Quadro de Efetivo de Obra</h3>
+                  <p className="text-[10px] text-slate-400">Adicione as subcontratadas mobilizadas ou gerencie as funções/efetivo de cada uma</p>
+                </div>
+                
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    className="h-8.5 rounded border border-slate-300 text-xs px-2 text-slate-700 bg-white font-medium focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                    defaultValue=""
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        handleAddSubcontractorGroup(e.target.value);
+                        e.target.value = "";
+                      }
+                    }}
+                  >
+                    <option value="" disabled>-- Adicionar do Cadastro da Obra --</option>
+                    {registeredSubs.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                  
+                  <button
+                    onClick={() => {
+                      const typed = prompt("Digite o nome da nova subcontratada:");
+                      if (typed && typed.trim()) {
+                        handleAddSubcontractorGroup(typed);
+                      }
+                    }}
+                    className="h-8.5 px-3 bg-slate-900 border border-slate-800 text-white rounded text-[10px] font-bold uppercase tracking-wider hover:bg-slate-805 transition-colors cursor-pointer shrink-0"
+                  >
+                    + Customizada
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {currentReport.efetivoDetalhado.map((group, gIdx) => (
+                  <div key={group.id || gIdx} className="bg-white rounded border border-slate-200 overflow-hidden shadow-xs">
+                    <div className="bg-slate-900 px-3.5 py-2 flex justify-between items-center text-white">
+                      <input
+                        type="text"
+                        value={group.nome}
+                        onChange={(e) => {
+                          const updated = [...currentReport.efetivoDetalhado];
+                          updated[gIdx] = { ...updated[gIdx], nome: e.target.value };
+                          updateReport({ efetivoDetalhado: updated });
+                        }}
+                        className="bg-transparent border-none text-xs font-bold w-1/2 text-amber-400 focus:ring-0 p-0 hover:bg-slate-800/10 transition-colors cursor-text m-0"
+                        placeholder="NOME DA SUBCONTRATADA"
+                      />
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleAddLaborRow(gIdx)}
+                          className="flex items-center gap-1 bg-amber-600 hover:bg-amber-700 text-white rounded font-bold text-[9px] uppercase tracking-wider px-2 py-1 border-none cursor-pointer duration-150 transition-colors"
+                        >
+                          <Plus className="w-3 h-3" />
+                          Adicionar Função
+                        </button>
+                        
+                        <button
+                          onClick={() => handleDeleteSubcontractorGroup(gIdx)}
+                          className="flex items-center gap-0.5 bg-red-600 hover:bg-red-700 text-white rounded font-bold text-[9px] uppercase tracking-wider px-2 py-1 border-none cursor-pointer duration-150 transition-colors"
+                          title="Remover subcontratada e todas as suas funções do RDO"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Excluir Empresa
+                        </button>
+                      </div>
+                    </div>
 
                   <table className="w-full text-left text-xs border-collapse font-sans">
                     <thead>
@@ -1046,7 +1108,8 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
               <strong>Procedimento de consolidamento automático:</strong> O sistema realizará a soma matemática dos trabalhadores ativos (C - F) no quadro detalhado para preencher a seção resumitiva dos diários de obras ao salvar!
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* ================== TAB: EQUIPAMENTOS ================== */}
         {activeTab === "equipamentos" && (
