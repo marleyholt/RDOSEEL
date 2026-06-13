@@ -527,6 +527,15 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         maoDeObraParalisada: "",
         comentarios: "",
         total: "0h"
+      },
+      outros: {
+        ativo: false,
+        horas: [],
+        frentes: "",
+        local: "",
+        maoDeObraParalisada: "",
+        comentarios: "",
+        total: "0h"
       }
     };
 

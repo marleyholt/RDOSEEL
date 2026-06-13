@@ -7,6 +7,7 @@ import React from "react";
 import { RdoReport, StoppageDetailRow } from "../types";
 import { RainChart } from "./RainChart";
 import { ArrowLeft, Printer, ShieldCheck } from "lucide-react";
+import { useRdoStore } from "../context/RdoContext";
 
 interface RdoPrintViewProps {
   report: RdoReport;
@@ -71,6 +72,9 @@ const QrCodeSvg: React.FC<{ value: string }> = ({ value }) => {
 };
 
 export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, onClose }) => {
+  const { obras } = useRdoStore();
+  const currentObra = obras.find(o => o.id === report.obraId || o.nome === report.obra);
+  
   const triggerPrint = () => {
     window.print();
   };
@@ -79,6 +83,45 @@ export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, onClose }) =
     "6h", "7h", "8h", "9h", "10h", "11h", "12h", "13h", "14h", "15h", "16h", "17h", "18h", "19h", "20h", "21h", "22h", "23h",
     "0h", "1h", "2h", "3h", "4h", "5h"
   ];
+
+  // Build Monthly Daily Rain Data
+  const [monthlyRainLabels, monthlyRainValues] = React.useMemo(() => {
+    const rDate = report.data; // YYYY-MM-DD
+    if (!rDate) return [[], []];
+    
+    const [year, month, dayStr] = rDate.split('-');
+    const currentDay = parseInt(dayStr, 10);
+    const numDays = currentDay; // up to the report's day
+    
+    // Initialize day map
+    const dailyValues = new Array(numDays).fill({}).map((_, i) => ({ day: i + 1, total: 0 }));
+    
+    // Find reports for this obra in this month, up to currentDay
+    const { reports } = useRdoStore.getState ? useRdoStore.getState() : { reports: [] }; // fallback safely
+    
+    const relevantReports = reports.filter(r => {
+      if ((r.obraId !== report.obraId) && (r.obra !== report.obra)) return false;
+      if (!r.data || !r.data.startsWith(`${year}-${month}`)) return false;
+      return parseInt(r.data.split('-')[2], 10) <= currentDay;
+    });
+
+    relevantReports.forEach(r => {
+      const d = parseInt(r.data.split('-')[2], 10);
+      const val = Number(r.precipitacao?.total || 0);
+      const cell = dailyValues.find(x => x.day === d);
+      if (cell) cell.total = Math.max(cell.total, val); // in case of multiple reports same day, take max or sum, let's take max.
+    });
+
+    // Special case for the current report (if it's not saved to store yet or has newer modifications)
+    const currentVal = Number(report.precipitacao?.total || 0);
+    const cell = dailyValues.find(x => x.day === currentDay);
+    if (cell) cell.total = Math.max(cell.total, currentVal);
+
+    return [
+      dailyValues.map(d => String(d.day)),
+      dailyValues.map(d => d.total)
+    ];
+  }, [report, useRdoStore]);
 
   // Helper component to render signatures footer
   const PrintFooter: React.FC<{ pageNum: number }> = ({ pageNum }) => (
@@ -126,14 +169,21 @@ export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, onClose }) =
     <div className="flex justify-between items-stretch border border-gray-300 pb-0 bg-white">
       {/* Sabesp + Seel Vector representation */}
       <div className="w-1/4 min-w-[120px] p-2 flex flex-col justify-center items-center border-r border-gray-300 gap-1">
-        {/* Mocking SABESP logo path */}
-        <div className="flex items-center gap-1">
-          <div className="bg-[#00adef] text-white font-black text-[10px] px-1 rounded-sm tracking-tighter flex items-center h-5">
-            SABESP
-          </div>
-          <div className="bg-[#004899] text-white font-extrabold text-[10px] px-1 rounded-sm leading-tight flex items-center h-5 border border-[#3b82f6]">
-            SEEL
-          </div>
+        <div className="flex items-center gap-1 w-full justify-center">
+          {currentObra?.logoCliente ? (
+            <img src={currentObra.logoCliente} alt="Logo Cliente" className="h-8 max-w-[50%] object-contain" referrerPolicy="no-referrer" />
+          ) : (
+            <div className="bg-[#00adef] text-white font-black text-[10px] px-1 rounded-sm tracking-tighter flex items-center h-5">
+              SABESP
+            </div>
+          )}
+          {currentObra?.logoSeel ? (
+            <img src={currentObra.logoSeel} alt="Logo Contratada" className="h-8 max-w-[50%] object-contain" referrerPolicy="no-referrer" />
+          ) : (
+            <div className="bg-[#004899] text-white font-extrabold text-[10px] px-1 rounded-sm leading-tight flex items-center h-5 border border-[#3b82f6]">
+              SEEL
+            </div>
+          )}
         </div>
         <span className="text-[7px] text-center font-semibold text-gray-400 block tracking-tight">SERVIÇOS DE ENGENHARIA</span>
       </div>
@@ -571,8 +621,8 @@ export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, onClose }) =
               {/* Vector Rainfall chart placeholder */}
               <div className="mt-2 flex justify-center w-full bg-white border border-gray-200 rounded p-1">
                 <div className="w-full">
-                  <p className="text-[7.5px] uppercase font-bold text-gray-400 text-center mb-1">CÁLCULO E ANÁLISE DE CHUVA - ÚLTIMAS 24H</p>
-                  <RainChart data={report.chuvaMmPorHora} />
+                  <p className="text-[7.5px] uppercase font-bold text-gray-400 text-center mb-1">CÁLCULO E ANÁLISE DE CHUVA - DIÁRIO ACUMULADO NO MÊS</p>
+                  <RainChart labels={monthlyRainLabels} values={monthlyRainValues} />
                 </div>
               </div>
             </div>

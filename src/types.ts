@@ -63,6 +63,7 @@ export interface StoppagesDetail {
   raios: StoppageDetailRow;
   projetos: StoppageDetailRow;
   vizinhos: StoppageDetailRow;
+  outros: StoppageDetailRow;
 }
 
 export interface PrecipitationResumo {

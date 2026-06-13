@@ -6,17 +6,11 @@
 import React from "react";
 
 interface RainChartProps {
-  data: Record<string, number>;
+  labels: string[];
+  values: number[];
 }
 
-export const RainChart: React.FC<RainChartProps> = ({ data }) => {
-  // Hours list in correct sequence as shown in OCR (from 6h to 5h of next day)
-  const hours = [
-    "6h", "7h", "8h", "9h", "10h", "11h", "12h", "13h", "14h", "15h", "16h", "17h", "18h", "19h", "20h", "21h", "22h", "23h",
-    "0h", "1h", "2h", "3h", "4h", "5h"
-  ];
-
-  const values = hours.map(h => data[h] || 0);
+export const RainChart: React.FC<RainChartProps> = ({ labels, values }) => {
   const maxValue = Math.max(...values, 0.5); // Minimum y-scale of 0.5mm
 
   // Chart proportions
@@ -72,15 +66,15 @@ export const RainChart: React.FC<RainChartProps> = ({ data }) => {
           />
 
           {/* bars and labels */}
-          {hours.map((hour, idx) => {
-            const val = data[hour] || 0;
-            const barWidth = Math.max(8, (chartWidth / hours.length) * 0.5);
-            const x = paddingLeft + (idx * (chartWidth / hours.length)) + (chartWidth / hours.length) / 2 - barWidth / 2;
+          {labels.map((label, idx) => {
+            const val = values[idx] || 0;
+            const barWidth = Math.max(8, (chartWidth / labels.length) * 0.5);
+            const x = paddingLeft + (idx * (chartWidth / labels.length)) + (chartWidth / labels.length) / 2 - barWidth / 2;
             const barHeight = maxValue > 0 ? (val / maxValue) * chartHeight : 0;
             const y = height - paddingBottom - barHeight;
 
             return (
-              <g key={hour} className="group">
+              <g key={label} className="group">
                 {/* Visual Bar */}
                 {val > 0 && (
                   <rect
@@ -107,14 +101,14 @@ export const RainChart: React.FC<RainChartProps> = ({ data }) => {
                 )}
 
                 {/* X axis labels */}
-                {idx % (window.innerWidth < 640 ? 4 : 1) === 0 && (
+                {idx % (window.innerWidth < 640 && labels.length > 20 ? 4 : 1) === 0 && (
                   <text
                     x={x + barWidth / 2}
                     y={height - paddingBottom + 16}
                     textAnchor="middle"
                     className="font-mono text-[9px] fill-gray-500"
                   >
-                    {hour}
+                    {label}
                   </text>
                 )}
               </g>

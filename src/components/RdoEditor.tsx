@@ -159,6 +159,43 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
     updateReport({ atividades: updated });
   };
 
+  const parseFlexibleDate = (dateStr?: string): Date | null => {
+    if (!dateStr) return null;
+    if (dateStr.includes('-')) {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    } else if (dateStr.includes('/')) {
+      const parts = dateStr.split('/');
+      if (parts.length === 3 && parts[2].length === 4) return new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+    }
+    return null;
+  };
+
+  const calculatePrazoIncorrido = (dataStr?: string, inicioStr?: string): number | undefined => {
+    const dStart = parseFlexibleDate(inicioStr);
+    const dEnd = parseFlexibleDate(dataStr);
+    if (dStart && dEnd) {
+      return Math.floor((dEnd.getTime() - dStart.getTime()) / (1000 * 3600 * 24));
+    }
+    return undefined;
+  };
+
+  const handleDateChange = (dateStr: string) => {
+    const incorrido = calculatePrazoIncorrido(dateStr, currentReport.inicio);
+    updateReport({ 
+      data: dateStr,
+      ...(incorrido !== undefined ? { prazoIncorrido: incorrido } : {}) 
+    });
+  };
+
+  const handleInicioChange = (inicioStr: string) => {
+    const incorrido = calculatePrazoIncorrido(currentReport.data, inicioStr);
+    updateReport({ 
+      inicio: inicioStr,
+      ...(incorrido !== undefined ? { prazoIncorrido: incorrido } : {}) 
+    });
+  };
+
   // Dynamic accumulated rainfall calculation
   const calculateAccumulatedMonthRain = (): number => {
     if (!currentReport) return 0;
@@ -531,7 +568,7 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
                 <input
                   type="date"
                   value={currentReport.data}
-                  onChange={(e) => updateReport({ data: e.target.value })}
+                  onChange={(e) => handleDateChange(e.target.value)}
                   className="block h-8 w-full rounded border-slate-300 text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-slate-50/40"
                 />
               </div>
@@ -629,7 +666,7 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
                 <input
                   type="text"
                   value={currentReport.inicio}
-                  onChange={(e) => updateReport({ inicio: e.target.value })}
+                  onChange={(e) => handleInicioChange(e.target.value)}
                   className="block h-8 w-full rounded border-slate-300 text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-slate-50/40 hover:bg-slate-50/10 transition-colors"
                   placeholder="01/01/2016"
                 />
