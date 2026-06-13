@@ -153,10 +153,10 @@ function AppContent() {
       </header>
 
       {/* 2. BODY GENERAL CONTAINER */}
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className="flex-1 flex flex-col sm:flex-row overflow-hidden relative">
         
         {/* SIDEBAR: HISTORY LOG LIST (Left column) - Slate-900 High Density */}
-        <aside className="w-72 bg-slate-900 flex flex-col shrink-0 overflow-y-auto border-r border-slate-950 no-print text-slate-300">
+        <aside className="w-full sm:w-72 bg-slate-900 flex flex-col shrink-0 overflow-y-auto sm:border-r border-b sm:border-b-0 border-slate-950 no-print text-slate-300 sm:max-h-full max-h-[35vh]">
           
           {/* Worksite Active Select and Settings Trigger */}
           <div className="p-4 pb-2 border-b border-slate-800/80 space-y-1.5 shrink-0 bg-slate-950/60">

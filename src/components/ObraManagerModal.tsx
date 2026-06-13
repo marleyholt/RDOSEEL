@@ -316,6 +316,10 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
 
   const handleRemoveActivity = (id: string) => {
     setAtividades(atividades.filter(a => a.id !== id));
+    setMessage({ 
+      text: "Atividade removida localmente. Clique em 'Salvar Alterações' para confirmar definitivamente.", 
+      type: "success" 
+    });
   };
 
   // Save the full Obra details
@@ -396,10 +400,10 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
         </header>
 
         {/* Modal Workspace Grid */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
           
           {/* Work Selector Sidebar */}
-          <aside className="w-64 bg-slate-50 border-r border-slate-200 p-4 flex flex-col gap-3 shrink-0">
+          <aside className="w-full md:w-64 bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 p-4 flex flex-col gap-3 shrink-0">
             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Selecionar Obra</span>
             
             <select
@@ -450,7 +454,7 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
                 1. Informações Gerais do Contrato
               </h4>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1 font-sans">
                   <label className="text-[10px] text-slate-500 font-bold uppercase">Nome Completo da Obra *</label>
                   <input
@@ -495,7 +499,7 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
                   />
                 </div>
 
-                <div className="space-y-1 col-span-2">
+                <div className="space-y-1 col-span-1 md:col-span-2">
                   <label className="text-[10px] text-slate-500 font-bold uppercase">Gerenciadora Fiscal *</label>
                   <input
                     type="text"
@@ -515,7 +519,7 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
                 2. Datas de Vigência e Prazos Contratuais
               </h4>
 
-              <div className="grid grid-cols-4 gap-4 items-end">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
                 <div className="space-y-1">
                   <label className="text-[10px] text-slate-500 font-bold uppercase">Data de Início *</label>
                   <input
@@ -562,7 +566,7 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
                 3. Logotipe de Clientes e Engenharia
               </h4>
 
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* cliente logo */}
                 <div className="border border-dashed border-slate-300 rounded-xl p-4 bg-white flex flex-col items-center justify-center text-center space-y-3">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Logo do Cliente (SABESP, etc.)</span>

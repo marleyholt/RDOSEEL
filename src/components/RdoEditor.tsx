@@ -37,7 +37,7 @@ interface RdoEditorProps {
 
 export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
   const { currentReport, setCurrentReport, saveReport, isFirebase, obras, reports } = useRdoStore();
-  const [activeTab, setActiveTab] = useState<"geral" | "atividades" | "paralisacoes" | "efetivo" | "equipamentos">("geral");
+  const [activeTab, setActiveTab] = useState<"geral" | "atividades" | "paralisacoes" | "efetivo" | "equipamentos" | "anexos">("geral");
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -522,7 +522,8 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
           { id: "atividades", label: "Atividades de Campo", icon: FileText },
           { id: "paralisacoes", label: "Paralisações e Clima", icon: CloudRain },
           { id: "efetivo", label: "Quadro de Efetivo", icon: Users },
-          { id: "equipamentos", label: "Equipamentos e Assinaturas", icon: Wrench },
+          { id: "equipamentos", label: "Equipamentos", icon: Wrench },
+          { id: "anexos", label: "Anexos Documentais", icon: ImageIcon },
         ].map((tab) => {
           const Icon = tab.icon;
           const isSelected = activeTab === tab.id;
@@ -1122,7 +1123,8 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
                       </div>
                     </div>
 
-                  <table className="w-full text-left text-xs border-collapse font-sans">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse font-sans min-w-[600px]">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[9px] tracking-wider">
                         <th className="p-2">Cargo / Função</th>
@@ -1197,6 +1199,7 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1225,7 +1228,8 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
                 </button>
               </div>
 
-              <table className="w-full text-left text-xs border-collapse font-sans">
+              <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse font-sans min-w-[600px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[9px] tracking-wider">
                     <th className="p-2">Descrição do Equipamento</th>
@@ -1282,6 +1286,7 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
                   )}
                 </tbody>
               </table>
+              </div>
             </div>
 
             <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1.5 pt-2">Comentários Adicionais de Fiscalização</h3>
@@ -1346,6 +1351,68 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ================== TAB: ANEXOS ================== */}
+        {activeTab === "anexos" && (
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1.5 font-sans">Anexos Documentais</h3>
+            <p className="text-[11px] text-slate-500 mb-2">Insira imagens (fotos, projetos, recibos) para serem anexadas como páginas complementares no documento impresso/PDF do RDO.</p>
+            
+            <div className="border border-dashed border-slate-300 rounded-xl p-4 bg-slate-50/50 flex flex-col items-center justify-center text-center space-y-3 relative">
+              <input
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={(e) => {
+                  const files = e.target.files;
+                  if (!files || files.length === 0) return;
+                  
+                  const readers = Array.from(files).map((file) => {
+                    return new Promise<{ id: string, dataUrl: string }>((resolve) => {
+                      const reader = new FileReader();
+                      reader.onloadend = () => resolve({ id: "anx-" + Math.random().toString(36).substr(2, 9), dataUrl: reader.result as string });
+                      reader.readAsDataURL(file);
+                    });
+                  });
+                  
+                  Promise.all(readers).then((newAnexos) => {
+                    updateReport({
+                      anexos: [...(currentReport.anexos || []), ...newAnexos]
+                    });
+                  });
+                }}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
+              <ImageIcon className="w-8 h-8 text-slate-400" />
+              <div>
+                <p className="text-[11px] font-bold text-slate-700">Clique ou arraste imagens aqui</p>
+                <p className="text-[10px] text-slate-500 mt-1">Imagens selecionadas serão impressas no final do documento</p>
+              </div>
+            </div>
+
+            {(currentReport.anexos || []).length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                {(currentReport.anexos || []).map((anexo) => (
+                  <div key={anexo.id} className="relative aspect-square rounded border border-slate-200 bg-white shadow-xs group overflow-hidden">
+                    <img src={anexo.dataUrl} alt="Anexo" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <button
+                        onClick={() => {
+                          updateReport({
+                            anexos: (currentReport.anexos || []).filter(a => a.id !== anexo.id)
+                          });
+                        }}
+                        className="bg-red-600 text-white p-2 rounded-full hover:bg-red-700 shadow shadow-black/50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

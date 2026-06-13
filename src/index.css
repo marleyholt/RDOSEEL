@@ -46,6 +46,11 @@
       background: white !important;
     }
 
+    .print-page:last-child {
+      page-break-after: auto !important;
+      break-after: auto !important;
+    }
+
     /* Keep footer stuck to the bottom of each page to prevent empty voids */
     .print-footer {
       position: absolute !important;

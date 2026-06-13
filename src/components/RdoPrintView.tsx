@@ -123,6 +123,42 @@ export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, onClose }) =
     ];
   }, [report, useRdoStore]);
 
+  // Build Yearly Monthly Rain Data
+  const [yearlyRainLabels, yearlyRainValues] = React.useMemo(() => {
+    const rDate = report.data; // YYYY-MM-DD
+    if (!rDate) return [[], []];
+    
+    const [year] = rDate.split('-');
+    const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    
+    // Sum MAX daily precipitation per day over the month to avoid duplicate reports counting twice
+    const monthDaySums: Record<number, Record<string, number>> = {};
+    for (let m=1; m<=12; m++) monthDaySums[m] = {};
+
+    const { reports } = useRdoStore.getState ? useRdoStore.getState() : { reports: [] };
+    
+    const relevantReports = reports.filter(r => {
+      if ((r.obraId !== report.obraId) && (r.obra !== report.obra)) return false;
+      return r.data && r.data.startsWith(`${year}-`);
+    });
+
+    relevantReports.forEach(r => {
+      const [, m, d] = r.data.split('-');
+      const mInt = parseInt(m, 10);
+      const val = Number(r.precipitacao?.total || 0);
+      if (mInt >= 1 && mInt <= 12) {
+        monthDaySums[mInt][d] = Math.max(monthDaySums[mInt][d] || 0, val);
+      }
+    });
+
+    const valMap = new Array(12).fill(0);
+    for (let m=1; m<=12; m++) {
+      valMap[m-1] = Object.values(monthDaySums[m]).reduce((acc, v) => acc + v, 0);
+    }
+    
+    return [months, valMap];
+  }, [report, useRdoStore]);
+
   // Helper component to render signatures footer
   const PrintFooter: React.FC<{ pageNum: number }> = ({ pageNum }) => (
     <div className="border-t border-gray-300 grid grid-cols-4 gap-2 text-center text-[10px] mt-auto pt-2 print-footer bg-white">
@@ -581,33 +617,6 @@ export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, onClose }) =
                 CONDIÇÕES CLIMÁTICAS & ÍNDICE PLUVIOMÉTRICO (CHUVA MM)
               </h4>
               
-              {/* Hour by hour rainfall horizontal cells */}
-              <div className="border border-gray-300 overflow-x-auto mt-1">
-                <table className="w-full text-center border-collapse text-[7.5px]">
-                  <thead>
-                    <tr className="bg-gray-100 divide-x divide-gray-200 border-b border-gray-300 font-bold text-gray-600">
-                      {hoursList.map(h => <th key={h} className="p-0.5 w-6">{h}</th>)}
-                      <th className="p-0.5 w-12 bg-blue-50 text-blue-900 border-l border-gray-300">TOTAL</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="divide-x divide-gray-200 font-mono text-gray-700">
-                      {hoursList.map(h => {
-                        const val = report.chuvaMmPorHora[h] || 0;
-                        return (
-                          <td key={h} className={val > 0 ? "p-0.5 bg-blue-50 text-blue-800 font-bold" : "p-0.5 text-gray-300"}>
-                            {val > 0 ? `${val}` : "-"}
-                          </td>
-                        );
-                      })}
-                      <td className="p-1 font-bold text-blue-700 bg-blue-100/50 text-[8px] border-l border-gray-300">
-                        {report.precipitacao.total} mm
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
               {/* Rain summarizes text row */}
               <div className="mt-1 border border-gray-300 p-1.5 grid grid-cols-6 gap-2 text-[8px] text-gray-600 bg-white leading-tight">
                 <div>Manhã: <strong className="text-gray-800 font-mono">{report.precipitacao.manha} mm</strong></div>
@@ -618,11 +627,15 @@ export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, onClose }) =
                 <div>Mês Anterior: <strong className="text-gray-800 font-mono">{report.precipitacao.acumuladoMesAnterior} mm</strong></div>
               </div>
 
-              {/* Vector Rainfall chart placeholder */}
-              <div className="mt-2 flex justify-center w-full bg-white border border-gray-200 rounded p-1">
-                <div className="w-full">
+              {/* Vector Rainfall charts */}
+              <div className="mt-2 grid grid-cols-1 gap-2">
+                <div className="bg-white border border-gray-200 rounded p-1">
                   <p className="text-[7.5px] uppercase font-bold text-gray-400 text-center mb-1">CÁLCULO E ANÁLISE DE CHUVA - DIÁRIO ACUMULADO NO MÊS</p>
                   <RainChart labels={monthlyRainLabels} values={monthlyRainValues} />
+                </div>
+                <div className="bg-white border border-gray-200 rounded p-1">
+                  <p className="text-[7.5px] uppercase font-bold text-gray-400 text-center mb-1">CÁLCULO E ANÁLISE DE CHUVA - MENSAL ACUMULADO NO ANO</p>
+                  <RainChart labels={yearlyRainLabels} values={yearlyRainValues} />
                 </div>
               </div>
             </div>
@@ -769,6 +782,32 @@ export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, onClose }) =
 
           <PrintFooter pageNum={3} />
         </div>
+
+        {/* ================= PAGE(S) ANEXOS ================= */}
+        {report.anexos && report.anexos.length > 0 && Array.from({ length: Math.ceil(report.anexos.length / 2) }).map((_, pageIdx) => {
+          const sliceAnexos = (report.anexos || []).slice(pageIdx * 2, pageIdx * 2 + 2);
+          return (
+            <div key={`anexo-page-${pageIdx}`} className="bg-white border md:border-gray-300 p-4 md:p-8 flex flex-col w-full min-h-[1120px] print-page relative shadow-sm print:shadow-none print:border-none">
+              <PrintHeader />
+
+              <div className="mt-2 text-[8.5px] flex flex-col flex-1 gap-3.5">
+                <h4 className="text-[9px] font-bold bg-[#004899] text-white py-0.5 px-2 uppercase tracking-wide">
+                  ANEXOS DOCUMENTAIS - PARTE {pageIdx + 1}
+                </h4>
+
+                <div className="flex-1 flex flex-col gap-4">
+                  {sliceAnexos.map((anexo, idx) => (
+                    <div key={idx} className="flex-1 border border-gray-300 rounded p-1 flex flex-col items-center justify-center bg-gray-50 overflow-hidden relative">
+                       <img src={anexo.dataUrl} className="max-w-full max-h-[440px] object-contain" alt="Anexo documental do relatório" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <PrintFooter pageNum={4 + pageIdx} />
+            </div>
+          );
+        })}
 
       </div>
     </div>
