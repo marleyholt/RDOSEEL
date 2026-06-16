@@ -28,7 +28,8 @@ import {
   CheckCircle,
   FileSpreadsheet,
   ChevronsUpDown,
-  Upload
+  Upload,
+  Lock
 } from "lucide-react";
 
 interface RdoEditorProps {
@@ -485,7 +486,54 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
           <button
             onClick={async () => {
               const nextStatus = currentReport.status === "Finalizado" ? "Em Digitação" : "Finalizado";
-              updateReport({ status: nextStatus });
+              
+              setSaving(true);
+              setSaveSuccess(false);
+              try {
+                // Auto compute total labor from detailed board
+                let computedMoi = 0;
+                let computedMod = 0;
+                currentReport.efetivoDetalhado.forEach(g => {
+                  g.items.forEach(itm => {
+                    if (itm.moiMod === "MOI") computedMoi += Number(itm.c || 0) - Number(itm.f || 0);
+                    if (itm.moiMod === "MOD") computedMod += Number(itm.c || 0) - Number(itm.f || 0);
+                  });
+                });
+
+                // Auto compute total equipment from detailed table
+                const computedEqTotal = currentReport.equipamentosDetalhado.reduce((sum, q) => sum + Number(q.quantidade || 0), 0);
+
+                const computedElapsed = Number(currentReport.prazoIncorrido || 0);
+                const computedRemaining = Math.max(0, Number(currentReport.prazo || 0) - computedElapsed);
+                const computedAccumulatedRain = calculateAccumulatedMonthRain();
+
+                await saveReport({
+                  ...currentReport,
+                  status: nextStatus,
+                  prazoFaltante: computedRemaining,
+                  precipitacao: {
+                    ...currentReport.precipitacao,
+                    acumuladoMes: computedAccumulatedRain
+                  },
+                  efetivoSummary: {
+                    ...currentReport.efetivoSummary,
+                    moi: computedMoi,
+                    mod: computedMod,
+                    total: computedMoi + computedMod + Number(currentReport.efetivoSummary.subcontratadosMoiMod || 0)
+                  },
+                  equipamentosSummary: {
+                    ...currentReport.equipamentosSummary,
+                    total: computedEqTotal,
+                    mobilizados: computedEqTotal
+                  }
+                });
+                setSaveSuccess(true);
+                setTimeout(() => setSaveSuccess(false), 3000);
+              } catch (err) {
+                console.error(err);
+              } finally {
+                setSaving(false);
+              }
             }}
             className={`h-8 flex items-center gap-1.5 px-3 font-bold text-[11px] uppercase tracking-wide rounded transition-all shadow-xs text-white ${
               currentReport.status === "Finalizado" 
@@ -499,7 +547,7 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
 
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || currentReport.status === "Finalizado"}
             className="h-8 flex items-center gap-1 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-[11px] uppercase tracking-wide rounded transition-all shadow-xs"
           >
             <Save className="w-3.5 h-3.5" />
@@ -545,7 +593,23 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
       </div>
 
       {/* TABS CONTAINER */}
-      <div className="bg-white p-5 rounded-b border border-t-0 border-slate-200 shadow-xs min-h-[460px]">
+      <div className="bg-white p-5 rounded-b border border-t-0 border-slate-200 shadow-xs min-h-[460px] relative">
+        {currentReport.status === "Finalizado" && (
+          <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-3 mb-5 text-slate-700 select-none animate-fade-in no-print">
+            <div className="flex items-center gap-2">
+              <Lock className="w-4 h-4 text-emerald-600 shrink-0" />
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-700">Modo de Apenas Leitura Ativo</span>
+                <span className="text-xs text-slate-500 font-mono hidden md:inline">— Este RDO está finalizado e bloqueado para edições.</span>
+              </div>
+            </div>
+            <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tight">
+              Clique em <strong className="text-slate-800 bg-slate-200 px-1.5 py-0.5 rounded">Reabrir RDO</strong> acima para editar.
+            </p>
+          </div>
+        )}
+
+        <div className={currentReport.status === "Finalizado" ? "pointer-events-none select-none opacity-85" : ""}>
         
         {/* ================== TAB: GERAL ================== */}
         {activeTab === "geral" && (
@@ -1358,21 +1422,26 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
         {activeTab === "anexos" && (
           <div className="space-y-4">
             <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1.5 font-sans">Anexos Documentais</h3>
-            <p className="text-[11px] text-slate-500 mb-2">Insira imagens (fotos, projetos, recibos) para serem anexadas como páginas complementares no documento impresso/PDF do RDO.</p>
+            <p className="text-[11px] text-slate-500 mb-2 font-sans">Insira imagens (fotos, projetos, recibos) ou arquivos PDF para serem anexados como páginas complementares no documento impresso/PDF do RDO.</p>
             
             <div className="border border-dashed border-slate-300 rounded-xl p-4 bg-slate-50/50 flex flex-col items-center justify-center text-center space-y-3 relative">
               <input
                 type="file"
                 multiple
-                accept="image/*"
+                accept="image/*,application/pdf"
                 onChange={(e) => {
                   const files = e.target.files;
                   if (!files || files.length === 0) return;
                   
-                  const readers = Array.from(files).map((file) => {
-                    return new Promise<{ id: string, dataUrl: string }>((resolve) => {
+                  const readers = Array.from(files).map((file: any) => {
+                    return new Promise<{ id: string, dataUrl: string, name?: string, type?: string }>((resolve) => {
                       const reader = new FileReader();
-                      reader.onloadend = () => resolve({ id: "anx-" + Math.random().toString(36).substr(2, 9), dataUrl: reader.result as string });
+                      reader.onloadend = () => resolve({ 
+                        id: "anx-" + Math.random().toString(36).substr(2, 9), 
+                        dataUrl: reader.result as string,
+                        name: file.name,
+                        type: file.type
+                      });
                       reader.readAsDataURL(file);
                     });
                   });
@@ -1387,35 +1456,51 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
               />
               <ImageIcon className="w-8 h-8 text-slate-400" />
               <div>
-                <p className="text-[11px] font-bold text-slate-700">Clique ou arraste imagens aqui</p>
-                <p className="text-[10px] text-slate-500 mt-1">Imagens selecionadas serão impressas no final do documento</p>
+                <p className="text-[11px] font-bold text-slate-700 font-sans">Clique ou arraste imagens/PDFs aqui</p>
+                <p className="text-[10px] text-slate-500 mt-1 font-sans">Imagens e arquivos PDF selecionados serão impressos no final do documento</p>
               </div>
             </div>
 
             {(currentReport.anexos || []).length > 0 && (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-                {(currentReport.anexos || []).map((anexo) => (
-                  <div key={anexo.id} className="relative aspect-square rounded border border-slate-200 bg-white shadow-xs group overflow-hidden">
-                    <img src={anexo.dataUrl} alt="Anexo" className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <button
-                        onClick={() => {
-                          updateReport({
-                            anexos: (currentReport.anexos || []).filter(a => a.id !== anexo.id)
-                          });
-                        }}
-                        className="bg-red-600 text-white p-2 rounded-full hover:bg-red-700 shadow shadow-black/50"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                {(currentReport.anexos || []).map((anexo) => {
+                  const isPdf = anexo.type === "application/pdf" || (anexo.dataUrl && anexo.dataUrl.startsWith("data:application/pdf"));
+                  return (
+                    <div key={anexo.id} className="relative aspect-square rounded border border-slate-200 bg-white shadow-xs group overflow-hidden flex flex-col items-center justify-center p-2">
+                      {isPdf ? (
+                        <div className="flex flex-col items-center justify-center text-center p-2 h-full w-full bg-red-50/50 rounded">
+                          <FileText className="w-8 h-8 text-red-600 mb-1" />
+                          <span className="text-[9px] text-slate-700 font-medium line-clamp-3 px-1 break-all leading-tight font-sans" title={anexo.name}>
+                            {anexo.name || "Documento PDF"}
+                          </span>
+                          <span className="text-[8px] uppercase tracking-wider text-red-700 bg-red-100 rounded px-1.5 py-0.5 mt-1 font-bold font-mono">
+                            PDF
+                          </span>
+                        </div>
+                      ) : (
+                        <img src={anexo.dataUrl} alt="Anexo" className="w-full h-full object-cover rounded" />
+                      )}
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <button
+                          onClick={() => {
+                            updateReport({
+                              anexos: (currentReport.anexos || []).filter(a => a.id !== anexo.id)
+                            });
+                          }}
+                          className="bg-red-600 text-white p-2 rounded-full hover:bg-red-700 shadow shadow-black/50 cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         )}
 
+        </div>
       </div>
     </div>
   );

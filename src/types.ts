@@ -105,7 +105,7 @@ export interface RdoReport {
   data: string; // YYYY-MM-DD
   obra: string;
   obraId?: string; // Links to the ObraConfig
-  anexos?: { id: string, dataUrl: string }[]; // base64 images
+  anexos?: { id: string, dataUrl: string, name?: string, type?: string }[]; // base64 images or PDFs
   status?: "Em Digitação" | "Finalizado";
   cliente: string;
   contratada?: string; // Main contractor (e.g., SEEL)

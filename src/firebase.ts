@@ -287,6 +287,15 @@ export const DEFAULT_REPORTS: RdoReport[] = [
         maoDeObraParalisada: "Betoneiras",
         comentarios: "Paralisação devido a pedido do proprietário do local que...",
         total: "2h"
+      },
+      outros: {
+        ativo: false,
+        horas: [],
+        frentes: "",
+        local: "",
+        maoDeObraParalisada: "",
+        comentarios: "",
+        total: "0h"
       }
     },
     chuvaMmPorHora: {

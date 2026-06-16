@@ -22,7 +22,8 @@ import {
   Clock, 
   Sparkles,
   Info,
-  Calendar
+  Calendar,
+  Printer
 } from "lucide-react";
 
 // Formatting helper
@@ -58,7 +59,9 @@ function AppContent() {
   } = useRdoStore();
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"todos" | "Em Digitação" | "Finalizado">("todos");
   const [showPrintView, setShowPrintView] = useState(false);
+  const [showBatchPrint, setShowBatchPrint] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [showObraManager, setShowObraManager] = useState(false);
 
@@ -78,15 +81,25 @@ function AppContent() {
     return <AuthScreen />;
   }
 
-  // Filter RDO reports based on search AND worksite selection
+  // Filter RDO reports based on search, status AND worksite selection
   const filteredReports = reports.filter(r => {
     const matchesSearch = r.rdoNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           r.obra.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           r.data.includes(searchTerm);
+    const matchesStatus = statusFilter === "todos" || (r.status || "Em Digitação") === statusFilter;
     if (currentObra) {
-      return matchesSearch && r.obraId === currentObra.id;
+      return matchesSearch && matchesStatus && r.obraId === currentObra.id;
     }
-    return matchesSearch;
+    return matchesSearch && matchesStatus;
+  });
+
+  // Collect all finalized reports for the active worksite to print in batch
+  const finalizedReportsToPrint = reports.filter(r => {
+    const isFinalized = (r.status || "Em Digitação") === "Finalizado";
+    if (currentObra) {
+      return isFinalized && r.obraId === currentObra.id;
+    }
+    return isFinalized;
   });
 
   const handleCreateNewRdo = () => {
@@ -191,9 +204,9 @@ function AppContent() {
           <div className="p-4 pt-3 border-b border-slate-850 space-y-3 shrink-0 bg-slate-950/20">
             <button
               onClick={handleCreateNewRdo}
-              className="w-full h-9 bg-amber-600 hover:bg-amber-700 text-white rounded font-bold text-xs tracking-wide flex items-center justify-center gap-1.5 transition-all shadow-sm outline-none"
+              className="w-full h-9 bg-amber-600 hover:bg-amber-700 text-white rounded font-bold text-xs tracking-wide flex items-center justify-center gap-1.5 transition-all shadow-sm outline-none cursor-pointer"
             >
-              <Plus className="w-4 h-4 text-yellow-100" />
+              <Plus className="w-4 h-4 text-yellow-105" />
               NOVO DIÁRIO DE OBRA (RDO)
             </button>
 
@@ -207,6 +220,40 @@ function AppContent() {
                 className="w-full bg-slate-800 border-none rounded text-xs py-1.5 pl-9 pr-3 text-slate-200 placeholder-slate-500 focus:ring-1 focus:ring-amber-500 outline-none"
               />
             </div>
+
+            {/* Filtro de Status RDO */}
+            <div className="grid grid-cols-3 gap-1 bg-slate-950/50 p-1 rounded border border-slate-800">
+              <button
+                onClick={() => setStatusFilter("todos")}
+                className={`py-1 rounded text-[9px] uppercase font-bold transition-all border-none cursor-pointer leading-tight ${
+                  statusFilter === "todos"
+                    ? "bg-amber-500 text-slate-950 font-black shadow-sm"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Todos
+              </button>
+              <button
+                onClick={() => setStatusFilter("Em Digitação")}
+                className={`py-1 rounded text-[9px] uppercase font-bold transition-all border-none cursor-pointer leading-tight ${
+                  statusFilter === "Em Digitação"
+                    ? "bg-amber-400 text-slate-950 font-black shadow-sm"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Digitação
+              </button>
+              <button
+                onClick={() => setStatusFilter("Finalizado")}
+                className={`py-1 rounded text-[9px] uppercase font-bold transition-all border-none cursor-pointer leading-tight ${
+                  statusFilter === "Finalizado"
+                    ? "bg-emerald-500 text-slate-950 font-black shadow-sm"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Finalizados
+              </button>
+            </div>
           </div>
 
           {/* History listing log */}
@@ -215,6 +262,19 @@ function AppContent() {
               <span>Registros Recentes</span>
               <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded font-mono text-[9px]">{filteredReports.length}</span>
             </div>
+
+            {finalizedReportsToPrint.length > 0 && (
+              <div className="px-4 py-2 bg-slate-900 border-b border-slate-800/80 flex justify-between items-center shrink-0">
+                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Lote de Finalizados ({finalizedReportsToPrint.length})</span>
+                <button
+                  onClick={() => setShowBatchPrint(true)}
+                  className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[9px] font-bold uppercase tracking-wider px-2 py-1 border-none cursor-pointer transition-all shadow-sm leading-none"
+                >
+                  <Printer className="w-3 h-3" />
+                  Imprimir Lote
+                </button>
+              </div>
+            )}
 
             <div className="divide-y divide-slate-800/50">
               {filteredReports.length > 0 ? (
@@ -235,10 +295,19 @@ function AppContent() {
                           : "border-transparent hover:bg-slate-800/60"
                       }`}
                     >
-                      <div className="flex justify-between items-start">
-                        <span className={`text-xs font-bold font-mono tracking-wider ${isSelected ? "text-white" : "text-slate-300"}`}>
-                          {report.rdoNo}
-                        </span>
+                      <div className="flex justify-between items-start gap-1">
+                        <div className="flex flex-col gap-0.5">
+                          <span className={`text-xs font-bold font-mono tracking-wider ${isSelected ? "text-white" : "text-slate-300"}`}>
+                            {report.rdoNo}
+                          </span>
+                          <span className={`text-[8px] font-bold uppercase tracking-wider ${
+                            (report.status || "Em Digitação") === "Finalizado" 
+                              ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20" 
+                              : "text-amber-400 bg-amber-500/10 border border-amber-500/20"
+                          } px-1 rounded w-fit`}>
+                            {report.status || "Em Digitação"}
+                          </span>
+                        </div>
                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 leading-none ${
                           isSelected ? "text-amber-300 bg-amber-500/10" : "text-slate-400 bg-slate-850"
                         }`}>
@@ -314,6 +383,14 @@ function AppContent() {
         <RdoPrintView 
           report={currentReport} 
           onClose={() => setShowPrintView(false)} 
+        />
+      )}
+
+      {/* 4. SHOW THE BATCH PRINT OVERLAY */}
+      {showBatchPrint && finalizedReportsToPrint.length > 0 && (
+        <RdoPrintView
+          reportsToPrint={finalizedReportsToPrint}
+          onClose={() => setShowBatchPrint(false)}
         />
       )}
 

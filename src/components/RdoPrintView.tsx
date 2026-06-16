@@ -6,11 +6,12 @@
 import React from "react";
 import { RdoReport, StoppageDetailRow } from "../types";
 import { RainChart } from "./RainChart";
-import { ArrowLeft, Printer, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Printer, ShieldCheck, FileText } from "lucide-react";
 import { useRdoStore } from "../context/RdoContext";
 
 interface RdoPrintViewProps {
-  report: RdoReport;
+  report?: RdoReport;
+  reportsToPrint?: RdoReport[];
   onClose: () => void;
 }
 
@@ -71,13 +72,9 @@ const QrCodeSvg: React.FC<{ value: string }> = ({ value }) => {
   );
 };
 
-export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, onClose }) => {
-  const { obras } = useRdoStore();
+const SingleReportPrint: React.FC<{ report: RdoReport }> = ({ report }) => {
+  const { obras, reports } = useRdoStore();
   const currentObra = obras.find(o => o.id === report.obraId || o.nome === report.obra);
-  
-  const triggerPrint = () => {
-    window.print();
-  };
 
   const hoursList = [
     "6h", "7h", "8h", "9h", "10h", "11h", "12h", "13h", "14h", "15h", "16h", "17h", "18h", "19h", "20h", "21h", "22h", "23h",
@@ -95,9 +92,6 @@ export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, onClose }) =
     
     // Initialize day map
     const dailyValues = new Array(numDays).fill({}).map((_, i) => ({ day: i + 1, total: 0 }));
-    
-    // Find reports for this obra in this month, up to currentDay
-    const { reports } = useRdoStore.getState ? useRdoStore.getState() : { reports: [] }; // fallback safely
     
     const relevantReports = reports.filter(r => {
       if ((r.obraId !== report.obraId) && (r.obra !== report.obra)) return false;
@@ -121,7 +115,7 @@ export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, onClose }) =
       dailyValues.map(d => String(d.day)),
       dailyValues.map(d => d.total)
     ];
-  }, [report, useRdoStore]);
+  }, [report, reports]);
 
   // Build Yearly Monthly Rain Data
   const [yearlyRainLabels, yearlyRainValues] = React.useMemo(() => {
@@ -134,8 +128,6 @@ export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, onClose }) =
     // Sum MAX daily precipitation per day over the month to avoid duplicate reports counting twice
     const monthDaySums: Record<number, Record<string, number>> = {};
     for (let m=1; m<=12; m++) monthDaySums[m] = {};
-
-    const { reports } = useRdoStore.getState ? useRdoStore.getState() : { reports: [] };
     
     const relevantReports = reports.filter(r => {
       if ((r.obraId !== report.obraId) && (r.obra !== report.obra)) return false;
@@ -157,7 +149,7 @@ export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, onClose }) =
     }
     
     return [months, valMap];
-  }, [report, useRdoStore]);
+  }, [report, reports]);
 
   // Helper component to render signatures footer
   const PrintFooter: React.FC<{ pageNum: number }> = ({ pageNum }) => (
@@ -291,33 +283,7 @@ export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, onClose }) =
   );
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm overflow-y-auto flex flex-col p-4 md:p-6 print-container">
-      {/* Action panel at top (hidden during printing) */}
-      <div className="bg-white max-w-5xl w-full mx-auto p-4 rounded-t-xl border-b border-slate-100 flex flex-wrap gap-3 justify-between items-center shadow-md no-print">
-        <button
-          onClick={onClose}
-          className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 rounded-lg font-medium text-xs text-slate-600 hover:bg-slate-50 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Voltar ao Editor
-        </button>
-        <div className="flex gap-2">
-          <div className="bg-blue-50 border border-blue-100 px-3 py-1 rounded-lg flex items-center gap-1.5 text-xs text-blue-700">
-            <ShieldCheck className="w-4 h-4 text-blue-500" />
-            <span>Assinado Eletronicamente</span>
-          </div>
-          <button
-            onClick={triggerPrint}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-[#004899] hover:bg-blue-800 text-white rounded-lg font-semibold text-xs transition-colors shadow-sm"
-          >
-            <Printer className="w-4 h-4" />
-            Imprimir RDO (Exportar PDF)
-          </button>
-        </div>
-      </div>
-
-      {/* Pages Container */}
-      <div className="max-w-5xl w-full mx-auto bg-slate-100 p-0 md:p-4 rounded-b-xl flex flex-col gap-6 scroll-smooth print:gap-0 print:p-0 print:bg-white">
+    <div className="flex flex-col gap-6 print:gap-0 bg-transparent print:bg-white break-after-page print:break-after-page mb-6 print:mb-0">
         
         {/* ================= PAGE 1 ================= */}
         <div className="bg-white border md:border-gray-300 p-4 md:p-8 flex flex-col w-full min-h-[1120px] print-page relative break-after-page shadow-sm print:shadow-none print:border-none">
@@ -796,11 +762,26 @@ export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, onClose }) =
                 </h4>
 
                 <div className="flex-1 flex flex-col gap-4">
-                  {sliceAnexos.map((anexo, idx) => (
-                    <div key={idx} className="flex-1 border border-gray-300 rounded p-1 flex flex-col items-center justify-center bg-gray-50 overflow-hidden relative">
-                       <img src={anexo.dataUrl} className="max-w-full max-h-[440px] object-contain" alt="Anexo documental do relatório" />
-                    </div>
-                  ))}
+                  {sliceAnexos.map((anexo, idx) => {
+                    const isPdf = anexo.type === "application/pdf" || (anexo.dataUrl && anexo.dataUrl.startsWith("data:application/pdf"));
+                    return (
+                      <div key={idx} className="flex-1 border border-gray-300 rounded p-1 flex flex-col items-center justify-center bg-gray-50 overflow-hidden relative">
+                         {isPdf ? (
+                           <div className="flex flex-col items-center justify-center text-center p-6 max-w-sm">
+                             <FileText className="w-12 h-12 text-red-600 mb-2" />
+                             <h5 className="text-[10px] font-bold text-gray-800 uppercase tracking-wide font-sans">{anexo.name || "Documento PDF Anexo"}</h5>
+                             <p className="text-[7px] text-gray-400 mt-1 uppercase font-mono">Tipo: Documento Digital PDF</p>
+                             <div className="w-16 border-b border-gray-200 my-2"></div>
+                             <p className="text-[8px] text-gray-400 leading-relaxed font-sans">
+                               O arquivo digital correspondente a este anexo foi consolidado com sucesso e faz parte integrante deste RDO eletrônico.
+                             </p>
+                           </div>
+                         ) : (
+                           <img src={anexo.dataUrl} className="max-w-full max-h-[440px] object-contain" alt="Anexo documental do relatório" />
+                         )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -809,6 +790,52 @@ export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, onClose }) =
           );
         })}
 
+    </div>
+  );
+};
+
+export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, reportsToPrint, onClose }) => {
+  const triggerPrint = () => {
+    window.print();
+  };
+
+  const reportsArray = reportsToPrint && reportsToPrint.length > 0
+    ? reportsToPrint
+    : (report ? [report] : []);
+
+  const totalReportsCount = reportsArray.length;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm overflow-y-auto flex flex-col p-4 md:p-6 print-container no-print:p-0">
+      {/* Action panel at top (hidden during printing) */}
+      <div className="bg-white max-w-5xl w-full mx-auto p-3 md:p-4 rounded-t-xl border-b border-slate-100 flex flex-wrap gap-3 justify-between items-center shadow-md no-print">
+        <button
+          onClick={onClose}
+          className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 rounded-lg font-medium text-xs text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Voltar ao Editor
+        </button>
+        <div className="flex gap-2">
+          <div className="bg-blue-50 border border-blue-100 px-3 py-1 rounded-lg flex items-center gap-1.5 text-xs text-blue-700">
+            <ShieldCheck className="w-4 h-4 text-blue-500" />
+            <span>Assinaturas Eletrônicas Ativas</span>
+          </div>
+          <button
+            onClick={triggerPrint}
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-[#004899] hover:bg-blue-800 text-white rounded-lg font-semibold text-xs transition-colors shadow-sm cursor-pointer"
+          >
+            <Printer className="w-4 h-4" />
+            {totalReportsCount > 1 ? `Imprimir Lote (${totalReportsCount} RDOs)` : "Imprimir RDO (Exportar PDF)"}
+          </button>
+        </div>
+      </div>
+
+      {/* Pages Container */}
+      <div className="max-w-5xl w-full mx-auto bg-slate-100 p-0 md:p-4 rounded-b-xl flex flex-col gap-6 scroll-smooth print:gap-0 print:p-0 print:bg-white print:max-w-none print:w-full">
+        {reportsArray.map((rep) => (
+          <SingleReportPrint key={rep.id || rep.rdoNo} report={rep} />
+        ))}
       </div>
     </div>
   );
