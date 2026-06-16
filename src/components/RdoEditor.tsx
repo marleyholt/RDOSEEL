@@ -29,7 +29,9 @@ import {
   FileSpreadsheet,
   ChevronsUpDown,
   Upload,
-  Lock
+  Lock,
+  Copy,
+  X
 } from "lucide-react";
 
 interface RdoEditorProps {
@@ -41,6 +43,7 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
   const [activeTab, setActiveTab] = useState<"geral" | "atividades" | "paralisacoes" | "efetivo" | "equipamentos" | "anexos">("geral");
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [cloneType, setCloneType] = useState<"efetivo" | "equipamentos" | null>(null);
 
   // Check if current date in currentRdo is already taken by another RDO of same Obra
   const hasDuplicateDate = React.useMemo(() => {
@@ -53,6 +56,14 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
       return sameObra && r.data === currentReport.data;
     });
   }, [currentReport, reports]);
+
+  // Retrieve other reports of the same Obra sorted chronologically
+  const otherReportsForCloning = React.useMemo(() => {
+    if (!currentReport) return [];
+    return (reports || [])
+      .filter(r => r.id !== currentReport.id && (currentReport.obraId ? r.obraId === currentReport.obraId : r.obra === currentReport.obra))
+      .sort((a, b) => b.data.localeCompare(a.data));
+  }, [reports, currentReport]);
 
   // Drag and drop / local state representation
   const [dragActive, setDragActive] = useState<Record<string, boolean>>({});
@@ -420,6 +431,66 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
   const handleDeleteEquipmentRow = (index: number) => {
     const updated = currentReport.equipamentosDetalhado.filter((_, i) => i !== index);
     updateReport({ equipamentosDetalhado: updated });
+  };
+
+  const handleCloneLabor = (sourceReport: RdoReport) => {
+    if (!sourceReport.efetivoDetalhado || sourceReport.efetivoDetalhado.length === 0) {
+      alert("O RDO selecionado não possui equipe lançada para clonar.");
+      return;
+    }
+    const clonedLabor = JSON.parse(JSON.stringify(sourceReport.efetivoDetalhado));
+    const secureClonedLabor = clonedLabor.map((group: any) => ({
+      ...group,
+      id: "labor-group-" + Math.random().toString(36).substring(2, 9) + Date.now(),
+      items: (group.items || []).map((itm: any) => ({
+        ...itm,
+        id: "labor-itm-" + Math.random().toString(36).substring(2, 9) + Date.now()
+      }))
+    }));
+
+    let computedMoi = 0;
+    let computedMod = 0;
+    secureClonedLabor.forEach((g: any) => {
+      (g.items || []).forEach((itm: any) => {
+        if (itm.moiMod === "MOI") computedMoi += Number(itm.c || 0) - Number(itm.f || 0);
+        if (itm.moiMod === "MOD") computedMod += Number(itm.c || 0) - Number(itm.f || 0);
+      });
+    });
+
+    updateReport({
+      efetivoDetalhado: secureClonedLabor,
+      efetivoSummary: {
+        ...currentReport.efetivoSummary,
+        moi: computedMoi,
+        mod: computedMod,
+        total: computedMoi + computedMod + Number(currentReport.efetivoSummary.subcontratadosMoiMod || 0)
+      }
+    });
+    setCloneType(null);
+  };
+
+  const handleCloneEquipment = (sourceReport: RdoReport) => {
+    if (!sourceReport.equipamentosDetalhado || sourceReport.equipamentosDetalhado.length === 0) {
+      alert("O RDO selecionado não possui equipamentos lançados para clonar.");
+      return;
+    }
+    const clonedEquip = JSON.parse(JSON.stringify(sourceReport.equipamentosDetalhado));
+    const secureClonedEquip = clonedEquip.map((eq: any) => ({
+      ...eq,
+      id: "eq-itm-" + Math.random().toString(36).substring(2, 9) + Date.now()
+    }));
+
+    const computedEqTotal = secureClonedEquip.reduce((sum: number, q: any) => sum + Number(q.quantidade || 0), 0);
+
+    updateReport({
+      equipamentosDetalhado: secureClonedEquip,
+      equipamentosSummary: {
+        ...currentReport.equipamentosSummary,
+        total: computedEqTotal,
+        mobilizados: computedEqTotal
+      }
+    });
+    setCloneType(null);
   };
 
   // Image Upload helper using FileReader base64
@@ -1174,6 +1245,15 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
                   >
                     + Customizada
                   </button>
+
+                  <button
+                    onClick={() => setCloneType("efetivo")}
+                    className="h-8.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer shrink-0 flex items-center gap-1 border-none"
+                    title="Clonar equipe de outro dia para o RDO que está editando"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    Clonar equipe de outro dia
+                  </button>
                 </div>
               </div>
 
@@ -1303,7 +1383,21 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
         {/* ================== TAB: EQUIPAMENTOS ================== */}
         {activeTab === "equipamentos" && (
           <div className="space-y-5 animate-fade-in">
-            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1.5">Equipamentos Mobilizados Detalhes</h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-1.5 font-sans">
+              <div>
+                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Equipamentos Mobilizados Detalhes</h3>
+                <p className="text-[10px] text-slate-400">Gerencie a frota de maquinários mobilizados ou clone dados de outros dias</p>
+              </div>
+              
+              <button
+                onClick={() => setCloneType("equipamentos")}
+                className="h-8.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer shrink-0 flex items-center gap-1 border-none"
+                title="Clonar equipamentos de outro dia para o RDO que está editando"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                Clonar equipamentos de outro dia
+              </button>
+            </div>
             
             <div className="bg-white rounded border border-slate-200 overflow-hidden shadow-xs">
               <div className="bg-slate-900 px-3.5 py-2 flex justify-between items-center text-white">
@@ -1522,6 +1616,86 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Modal para Escolha e Clonagem de Dados (Efetivo ou Equipamentos) */}
+        {cloneType && (
+          <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in font-sans">
+            <div className="bg-white rounded-2xl border border-slate-100 p-6 max-w-lg w-full shadow-2xl flex flex-col max-h-[85vh]">
+              
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <Copy className="w-5 h-5 text-emerald-600" />
+                  <div>
+                    <h4 className="font-bold text-sm text-slate-900 uppercase tracking-wide">
+                      {cloneType === "efetivo" ? "Clonar Equipe (Efetivo)" : "Clonar Equipamentos"}
+                    </h4>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-tight font-semibold">
+                      Selecione o dia do diário de origem para copiar os dados
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setCloneType(null)}
+                  className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer border-none duration-150 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto py-4 custom-scrollbar space-y-2">
+                {otherReportsForCloning.length > 0 ? (
+                  otherReportsForCloning.map((rep, i) => {
+                    const laborCount = rep.efetivoDetalhado?.reduce((sum, g) => sum + (g.items || []).reduce((s, itm) => s + (Number(itm.c || 0) - Number(itm.f || 0)), 0), 0) || 0;
+                    const laborGroupCount = rep.efetivoDetalhado?.length || 0;
+                    const equipCount = rep.equipamentosDetalhado?.reduce((sum, q) => sum + Number(q.quantidade || 0), 0) || 0;
+
+                    return (
+                      <div 
+                        key={rep.id || i}
+                        onClick={() => {
+                          if (cloneType === "efetivo") handleCloneLabor(rep);
+                          else handleCloneEquipment(rep);
+                        }}
+                        className="border border-slate-150 rounded-xl p-3.5 hover:border-emerald-500 hover:bg-emerald-50/10 cursor-pointer transition-all flex items-center justify-between group"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded">RDO {rep.rdoNo || "-"}</span>
+                            <span className="text-xs font-bold text-slate-700">{formatPrintDate(rep.data)}</span>
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-medium">
+                            {cloneType === "efetivo" ? (
+                              <span>{laborGroupCount} empresas mobilizadas, {laborCount} pessoas presentes no total.</span>
+                            ) : (
+                              <span>{rep.equipamentosDetalhado?.length || 0} maquinários mobilizados, {equipCount} unidades no total.</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg text-[9px] font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">
+                          Selecionar
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-xs text-slate-400 italic">Nenhum outro diário de obra foi localizado para cópia.</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end pt-3 border-t border-gray-100">
+                <button
+                  onClick={() => setCloneType(null)}
+                  className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-slate-50 cursor-pointer duration-150 transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+
+            </div>
           </div>
         )}
 
