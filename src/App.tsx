@@ -118,9 +118,13 @@ function AppContent() {
   }).sort((a, b) => b.data.localeCompare(a.data));
 
   // Collect all finalized reports for the active worksite to print in batch
-  const handleCreateNewRdo = () => {
-    const freshTemplate = createNewReport();
-    saveReport(freshTemplate);
+  const handleCreateNewRdo = async () => {
+    try {
+      const freshTemplate = createNewReport();
+      await saveReport(freshTemplate);
+    } catch (e) {
+      console.warn("RDO creation prevented:", e);
+    }
   };
 
   const handleDeleteClick = (e: React.MouseEvent, id: string) => {

@@ -42,6 +42,18 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  // Check if current date in currentRdo is already taken by another RDO of same Obra
+  const hasDuplicateDate = React.useMemo(() => {
+    if (!currentReport || !currentReport.data) return false;
+    return (reports || []).some(r => {
+      if (r.id === currentReport.id) return false;
+      const sameObra = currentReport.obraId 
+        ? r.obraId === currentReport.obraId 
+        : r.obra === currentReport.obra;
+      return sameObra && r.data === currentReport.data;
+    });
+  }, [currentReport, reports]);
+
   // Drag and drop / local state representation
   const [dragActive, setDragActive] = useState<Record<string, boolean>>({});
 
@@ -62,6 +74,12 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
   };
 
   const handleSave = async () => {
+    if (hasDuplicateDate) {
+      const formattedDate = currentReport.data.split('-').reverse().join('/');
+      alert(`Já existe um RDO cadastrado para o dia ${formattedDate} nesta obra! Por favor, use outra data para poder salvar.`);
+      return;
+    }
+
     setSaving(true);
     setSaveSuccess(false);
     try {
@@ -629,13 +647,20 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-tight mb-1">Data do Relatório</label>
+                <label className={`block text-[10px] font-bold uppercase tracking-tight mb-1 ${hasDuplicateDate ? "text-red-500" : "text-slate-500"}`}>Data do Relatório</label>
                 <input
                   type="date"
                   value={currentReport.data}
                   onChange={(e) => handleDateChange(e.target.value)}
-                  className="block h-8 w-full rounded border-slate-300 text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-slate-50/40"
+                  className={`block h-8 w-full rounded text-xs text-slate-800 bg-slate-50/40 focus:ring-1 transition-all ${
+                    hasDuplicateDate 
+                      ? "border-red-500 focus:border-red-500 focus:ring-red-500 ring-1 ring-red-105" 
+                      : "border-slate-300 focus:border-amber-500 focus:ring-amber-500"
+                  }`}
                 />
+                {hasDuplicateDate && (
+                  <p className="text-[9px] text-red-500 font-bold mt-1 uppercase tracking-tight">Já existe um RDO nesta data!</p>
+                )}
               </div>
 
               <div>

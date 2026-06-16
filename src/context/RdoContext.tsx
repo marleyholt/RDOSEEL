@@ -382,6 +382,21 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const saveReport = async (report: RdoReport) => {
     if (!user) throw new Error("Usuário não autenticado");
 
+    // Trava para impedir RDOs com a mesma data para a mesma obra/obraId
+    const isDuplicate = (reports || []).some(r => {
+      if (r.id === report.id) return false;
+      const sameObra = report.obraId 
+        ? r.obraId === report.obraId 
+        : r.obra === report.obra;
+      return sameObra && r.data === report.data;
+    });
+
+    if (isDuplicate) {
+      const formattedDate = report.data.split('-').reverse().join('/');
+      alert(`Já existe um RDO cadastrado para o dia ${formattedDate} nesta obra! Por favor, escolha outra data.`);
+      throw new Error(`Data duplicada: RDO já existe para ${report.data}`);
+    }
+
     const reportToSave: RdoReport = {
       ...report,
       userId: user.uid,
