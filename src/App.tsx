@@ -62,9 +62,11 @@ function AppContent() {
   const [statusFilter, setStatusFilter] = useState<"todos" | "Em Digitação" | "Finalizado">("todos");
   const [showPrintView, setShowPrintView] = useState(false);
   const [showBatchPrint, setShowBatchPrint] = useState(false);
+  const [showBatchPrintConfig, setShowBatchPrintConfig] = useState(false);
+  const [batchStartDate, setBatchStartDate] = useState("");
+  const [batchEndDate, setBatchEndDate] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [showObraManager, setShowObraManager] = useState(false);
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
@@ -101,6 +103,17 @@ function AppContent() {
     }
     return isFinalized;
   });
+
+  // Computa a lista de RDOs filtrados chronologicamente para o lote
+  const batchReportsSelected = React.useMemo(() => {
+    return [...finalizedReportsToPrint]
+      .filter(r => {
+        if (batchStartDate && r.data < batchStartDate) return false;
+        if (batchEndDate && r.data > batchEndDate) return false;
+        return true;
+      })
+      .sort((a, b) => a.data.localeCompare(b.data));
+  }, [finalizedReportsToPrint, batchStartDate, batchEndDate]);
 
   const handleCreateNewRdo = () => {
     const freshTemplate = createNewReport();
@@ -267,7 +280,7 @@ function AppContent() {
               <div className="px-4 py-2 bg-slate-900 border-b border-slate-800/80 flex justify-between items-center shrink-0">
                 <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Lote de Finalizados ({finalizedReportsToPrint.length})</span>
                 <button
-                  onClick={() => setShowBatchPrint(true)}
+                  onClick={() => setShowBatchPrintConfig(true)}
                   className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[9px] font-bold uppercase tracking-wider px-2 py-1 border-none cursor-pointer transition-all shadow-sm leading-none"
                 >
                   <Printer className="w-3 h-3" />
@@ -387,11 +400,91 @@ function AppContent() {
       )}
 
       {/* 4. SHOW THE BATCH PRINT OVERLAY */}
-      {showBatchPrint && finalizedReportsToPrint.length > 0 && (
+      {showBatchPrint && batchReportsSelected.length > 0 && (
         <RdoPrintView
-          reportsToPrint={finalizedReportsToPrint}
+          reportsToPrint={batchReportsSelected}
           onClose={() => setShowBatchPrint(false)}
         />
+      )}
+
+      {/* MODAL CONFIGURAÇÃO IMPRESSÃO EM LOTE */}
+      {showBatchPrintConfig && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border p-6 max-w-md w-full shadow-2xl space-y-4 text-left">
+            <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+              <Printer className="w-5 h-5 text-emerald-605 text-emerald-600" />
+              <div>
+                <h4 className="font-bold text-sm text-gray-950 uppercase tracking-wide">Impressão em Lote (PDF)</h4>
+                <p className="text-[10px] text-gray-500 uppercase tracking-tight font-semibold">Defina o período dos diários finalizados</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Data de Início</label>
+                <input
+                  type="date"
+                  value={batchStartDate}
+                  onChange={(e) => setBatchStartDate(e.target.value)}
+                  className="w-full h-9 rounded-lg border-gray-200 border text-xs px-2.5 text-gray-700 focus:ring-1 focus:ring-emerald-500 outline-none"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Data de Fim</label>
+                <input
+                  type="date"
+                  value={batchEndDate}
+                  onChange={(e) => setBatchEndDate(e.target.value)}
+                  className="w-full h-9 rounded-lg border-gray-200 border text-xs px-2.5 text-gray-700 focus:ring-1 focus:ring-emerald-500 outline-none"
+                />
+              </div>
+            </div>
+
+            {/* List of reports matching the dates */}
+            <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 max-h-40 overflow-y-auto custom-scrollbar">
+              <span className="block text-[9px] uppercase font-bold text-gray-400 tracking-wider mb-2">
+                Diários Selecionados ({batchReportsSelected.length})
+              </span>
+              {batchReportsSelected.length > 0 ? (
+                <div className="space-y-1">
+                  {batchReportsSelected.map((r, i) => (
+                    <div key={r.id || r.rdoNo || i} className="flex justify-between items-center text-[10px] text-gray-700 font-mono py-1 border-b border-gray-100 last:border-b-0">
+                      <span className="font-bold text-slate-800">{r.rdoNo}</span>
+                      <span className="text-gray-500">{formatDateString(r.data)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[10px] text-gray-400 italic text-center py-4">Nenhum RDO finalizado encontrado para este período.</p>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 text-xs pt-2 border-t border-gray-100">
+              <button
+                onClick={() => {
+                  setShowBatchPrintConfig(false);
+                  setBatchStartDate("");
+                  setBatchEndDate("");
+                }}
+                className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl font-bold uppercase tracking-wider hover:bg-slate-50 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                disabled={batchReportsSelected.length === 0}
+                onClick={() => {
+                  setShowBatchPrintConfig(false);
+                  setShowBatchPrint(true);
+                }}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-all shadow-sm"
+              >
+                <Printer className="w-4 h-4" />
+                Visualizar Lote
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 4. MODAL DELETE CONFIRMATION */}

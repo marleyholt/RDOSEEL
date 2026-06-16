@@ -489,7 +489,34 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Create template report helper
   const createNewReport = (): RdoReport => {
-    const todayStr = new Date().toISOString().split("T")[0];
+    let todayStr = new Date().toISOString().split("T")[0];
+    
+    // Obter data mais recente dos relatos da obra atual ou globais
+    const targetReports = currentObra 
+      ? reports.filter(r => r.obraId === currentObra.id)
+      : reports;
+    
+    if (targetReports.length > 0) {
+      const sorted = [...targetReports].sort((a, b) => b.data.localeCompare(a.data));
+      const latestData = sorted[0].data;
+      try {
+        const d = new Date(latestData + "T12:00:00");
+        d.setDate(d.getDate() + 1);
+        todayStr = d.toISOString().split("T")[0];
+      } catch (e) {
+        console.error("Erro ao incrementar data de RDO:", e);
+      }
+    } else if (reports.length > 0) {
+      const sorted = [...reports].sort((a, b) => b.data.localeCompare(a.data));
+      const latestData = sorted[0].data;
+      try {
+        const d = new Date(latestData + "T12:00:00");
+        d.setDate(d.getDate() + 1);
+        todayStr = d.toISOString().split("T")[0];
+      } catch (e) {
+        console.error("Erro ao incrementar data de RDO:", e);
+      }
+    }
     
     const defaultStoppages: StoppagesDetail = {
       chuva: {
