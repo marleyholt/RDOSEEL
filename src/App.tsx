@@ -120,7 +120,7 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col text-slate-900 font-sans antialiased text-xs">
+    <div className="h-screen bg-slate-50 flex flex-col text-slate-900 font-sans antialiased text-xs overflow-hidden">
       
       {/* 1. TOP HEADER NAVIGATION - High Density Compact Format */}
       <header className="bg-white border-b border-slate-200 h-14 shrink-0 px-5 md:px-6 flex items-center justify-between no-print shadow-xs">
@@ -169,7 +169,7 @@ function AppContent() {
       <div className="flex-1 flex flex-col sm:flex-row overflow-hidden relative">
         
         {/* SIDEBAR: HISTORY LOG LIST (Left column) - Slate-900 High Density */}
-        <aside className="w-full sm:w-72 bg-slate-900 flex flex-col shrink-0 overflow-y-auto sm:border-r border-b sm:border-b-0 border-slate-950 no-print text-slate-300 sm:max-h-full max-h-[35vh]">
+        <aside className="w-full sm:w-72 bg-slate-900 flex flex-col shrink-0 sm:border-r border-b sm:border-b-0 border-slate-950 no-print text-slate-300 sm:h-full max-h-[40vh] sm:max-h-none overflow-hidden">
           
           {/* Worksite Active Select and Settings Trigger */}
           <div className="p-4 pb-2 border-b border-slate-800/80 space-y-1.5 shrink-0 bg-slate-950/60">
@@ -257,7 +257,7 @@ function AppContent() {
           </div>
 
           {/* History listing log */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto custom-scrollbar">
             <div className="px-4 py-2 bg-slate-950/70 text-[9px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between border-b border-slate-850">
               <span>Registros Recentes</span>
               <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded font-mono text-[9px]">{filteredReports.length}</span>
