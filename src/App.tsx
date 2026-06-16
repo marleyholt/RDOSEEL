@@ -67,6 +67,27 @@ function AppContent() {
   const [batchEndDate, setBatchEndDate] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [showObraManager, setShowObraManager] = useState(false);
+
+  // Collect all finalized reports for the active worksite to print in batch
+  const finalizedReportsToPrint = (reports || []).filter(r => {
+    const isFinalized = (r.status || "Em Digitação") === "Finalizado";
+    if (currentObra) {
+      return isFinalized && r.obraId === currentObra.id;
+    }
+    return isFinalized;
+  });
+
+  // Computa a lista de RDOs filtrados chronologicamente para o lote
+  const batchReportsSelected = React.useMemo(() => {
+    return [...finalizedReportsToPrint]
+      .filter(r => {
+        if (batchStartDate && r.data < batchStartDate) return false;
+        if (batchEndDate && r.data > batchEndDate) return false;
+        return true;
+      })
+      .sort((a, b) => a.data.localeCompare(b.data));
+  }, [finalizedReportsToPrint, batchStartDate, batchEndDate]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
@@ -96,25 +117,6 @@ function AppContent() {
   });
 
   // Collect all finalized reports for the active worksite to print in batch
-  const finalizedReportsToPrint = reports.filter(r => {
-    const isFinalized = (r.status || "Em Digitação") === "Finalizado";
-    if (currentObra) {
-      return isFinalized && r.obraId === currentObra.id;
-    }
-    return isFinalized;
-  });
-
-  // Computa a lista de RDOs filtrados chronologicamente para o lote
-  const batchReportsSelected = React.useMemo(() => {
-    return [...finalizedReportsToPrint]
-      .filter(r => {
-        if (batchStartDate && r.data < batchStartDate) return false;
-        if (batchEndDate && r.data > batchEndDate) return false;
-        return true;
-      })
-      .sort((a, b) => a.data.localeCompare(b.data));
-  }, [finalizedReportsToPrint, batchStartDate, batchEndDate]);
-
   const handleCreateNewRdo = () => {
     const freshTemplate = createNewReport();
     saveReport(freshTemplate);
