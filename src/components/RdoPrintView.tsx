@@ -6,13 +6,14 @@
 import React from "react";
 import { RdoReport, StoppageDetailRow } from "../types";
 import { RainChart } from "./RainChart";
-import { ArrowLeft, Printer, ShieldCheck, FileText } from "lucide-react";
+import { ArrowLeft, Printer, ShieldCheck, FileText, ChevronLeft, ChevronRight } from "lucide-react";
 import { useRdoStore } from "../context/RdoContext";
 
 interface RdoPrintViewProps {
   report?: RdoReport;
   reportsToPrint?: RdoReport[];
   onClose: () => void;
+  batchPrintedMode?: "single" | "individual";
 }
 
 // Helper to format short date like "08/05/2019, Qua"
@@ -794,9 +795,21 @@ const SingleReportPrint: React.FC<{ report: RdoReport }> = ({ report }) => {
   );
 };
 
-export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, reportsToPrint, onClose }) => {
-  const triggerPrint = () => {
+export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, reportsToPrint, onClose, batchPrintedMode = "single" }) => {
+  const [exportMode, setExportMode] = React.useState<"single" | "individual">(batchPrintedMode);
+  const [activeIndex, setActiveIndex] = React.useState(0);
+
+  const triggerPrintCombined = () => {
     window.print();
+  };
+
+  const triggerPrintSingleAndAdvance = () => {
+    window.print();
+    if (activeIndex < totalReportsCount - 1) {
+      setTimeout(() => {
+        setActiveIndex(prev => prev + 1);
+      }, 300);
+    }
   };
 
   const reportsArray = reportsToPrint && reportsToPrint.length > 0
@@ -804,38 +817,124 @@ export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, reportsToPri
     : (report ? [report] : []);
 
   const totalReportsCount = reportsArray.length;
+  const currentActiveReport = reportsArray[activeIndex] || null;
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm overflow-y-auto flex flex-col p-4 md:p-6 print-container no-print:p-0">
       {/* Action panel at top (hidden during printing) */}
-      <div className="bg-white max-w-5xl w-full mx-auto p-3 md:p-4 rounded-t-xl border-b border-slate-100 flex flex-wrap gap-3 justify-between items-center shadow-md no-print">
-        <button
-          onClick={onClose}
-          className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 rounded-lg font-medium text-xs text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Voltar ao Editor
-        </button>
-        <div className="flex gap-2">
-          <div className="bg-blue-50 border border-blue-100 px-3 py-1 rounded-lg flex items-center gap-1.5 text-xs text-blue-700">
-            <ShieldCheck className="w-4 h-4 text-blue-500" />
-            <span>Assinaturas Eletrônicas Ativas</span>
-          </div>
+      <div className="bg-white max-w-5xl w-full mx-auto p-3 md:p-4 rounded-t-xl border-b border-slate-100 flex flex-col sm:flex-row gap-3 justify-between items-center shadow-md no-print">
+        <div className="flex items-center gap-3">
           <button
-            onClick={triggerPrint}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-[#004899] hover:bg-blue-800 text-white rounded-lg font-semibold text-xs transition-colors shadow-sm cursor-pointer"
+            onClick={onClose}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 rounded-lg font-medium text-xs text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
           >
-            <Printer className="w-4 h-4" />
-            {totalReportsCount > 1 ? `Imprimir Lote (${totalReportsCount} RDOs)` : "Imprimir RDO (Exportar PDF)"}
+            <ArrowLeft className="w-4 h-4" />
+            Voltar ao Editor
           </button>
+          
+          {totalReportsCount > 1 && (
+            <div className="flex border border-slate-200 rounded-lg overflow-hidden bg-slate-50 p-0.5">
+              <button
+                onClick={() => setExportMode("single")}
+                className={`px-3 py-1.5 text-[10px] font-bold rounded-md cursor-pointer uppercase tracking-tight transition-all ${
+                  exportMode === "single"
+                    ? "bg-white text-[#004899] shadow-xs"
+                    : "text-slate-500 hover:text-slate-850"
+                }`}
+              >
+                PDF Único (Lote)
+              </button>
+              <button
+                onClick={() => setExportMode("individual")}
+                className={`px-3 py-1.5 text-[10px] font-bold rounded-md cursor-pointer uppercase tracking-tight transition-all ${
+                  exportMode === "individual"
+                    ? "bg-white text-[#004899] shadow-xs"
+                    : "text-slate-500 hover:text-slate-850"
+                }`}
+              >
+                Individual por Dia
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Individual Mode Navigation */}
+        {totalReportsCount > 1 && exportMode === "individual" && (
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/85 rounded-xl px-2 py-0.5">
+            <button
+              disabled={activeIndex === 0}
+              onClick={() => setActiveIndex(prev => Math.max(0, prev - 1))}
+              className="p-1 text-slate-500 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              title="Diário Anterior"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            
+            <div className="text-center font-mono text-[10px] text-slate-700 min-w-32 font-semibold uppercase">
+              RDO <span className="font-bold text-[#004899]">{currentActiveReport?.rdoNo}</span> ({activeIndex + 1}/{totalReportsCount})
+              <div className="text-[8px] text-slate-400 mt-0.5">{currentActiveReport ? formatPrintDate(currentActiveReport.data).split(",")[0] : ""}</div>
+            </div>
+
+            <button
+              disabled={activeIndex === totalReportsCount - 1}
+              onClick={() => setActiveIndex(prev => Math.min(totalReportsCount - 1, prev + 1))}
+              className="p-1 text-slate-500 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              title="Próximo Diário"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <div className="hidden sm:flex bg-blue-50 border border-blue-100 px-3 py-1 rounded-lg items-center gap-1.5 text-xs text-blue-700">
+            <ShieldCheck className="w-4 h-4 text-blue-500" />
+            <span>Assinaturas Ativas</span>
+          </div>
+
+          {exportMode === "single" ? (
+            <button
+              onClick={triggerPrintCombined}
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-[#004899] hover:bg-blue-800 text-white rounded-lg font-semibold text-xs transition-colors shadow-sm cursor-pointer uppercase tracking-wider"
+            >
+              <Printer className="w-4 h-4" />
+              {totalReportsCount > 1 ? `Imprimir Lote (${totalReportsCount} RDOs)` : "Imprimir RDO (Exportar PDF)"}
+            </button>
+          ) : (
+            <div className="flex gap-1.5">
+              <button
+                onClick={triggerPrintCombined}
+                className="flex items-center gap-1 px-3 py-1.5 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-semibold text-xs transition-colors shadow-sm cursor-pointer uppercase tracking-wider"
+                title="Imprimir apenas o RDO atualmente visualizado"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                Imprimir Este
+              </button>
+              
+              <button
+                onClick={triggerPrintSingleAndAdvance}
+                className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold text-xs transition-colors shadow-sm cursor-pointer uppercase tracking-wider animate-pulse hover:animate-none"
+                title="Imprime o RDO atual e depois avança automaticamente para o próximo dia na lista"
+              >
+                <Printer className="w-4 h-4" />
+                {activeIndex === totalReportsCount - 1 ? "Imprimir Último" : "Imprimir e Avançar"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Pages Container */}
       <div className="max-w-5xl w-full mx-auto bg-slate-100 p-0 md:p-4 rounded-b-xl flex flex-col gap-6 scroll-smooth print:gap-0 print:p-0 print:bg-white print:max-w-none print:w-full">
-        {reportsArray.map((rep) => (
-          <SingleReportPrint key={rep.id || rep.rdoNo} report={rep} />
-        ))}
+        {exportMode === "single" ? (
+          reportsArray.map((rep) => (
+            <SingleReportPrint key={rep.id || rep.rdoNo} report={rep} />
+          ))
+        ) : (
+          currentActiveReport && (
+            <SingleReportPrint key={currentActiveReport.id || currentActiveReport.rdoNo} report={currentActiveReport} />
+          )
+        )}
       </div>
     </div>
   );

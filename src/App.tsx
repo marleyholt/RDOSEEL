@@ -67,6 +67,7 @@ function AppContent() {
   const [batchEndDate, setBatchEndDate] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [showObraManager, setShowObraManager] = useState(false);
+  const [batchPrintMode, setBatchPrintMode] = useState<"single" | "individual">("single");
 
   // Collect all finalized reports for the active worksite to print in batch
   const finalizedReportsToPrint = (reports || []).filter(r => {
@@ -114,7 +115,7 @@ function AppContent() {
       return matchesSearch && matchesStatus && r.obraId === currentObra.id;
     }
     return matchesSearch && matchesStatus;
-  });
+  }).sort((a, b) => b.data.localeCompare(a.data));
 
   // Collect all finalized reports for the active worksite to print in batch
   const handleCreateNewRdo = () => {
@@ -406,6 +407,7 @@ function AppContent() {
         <RdoPrintView
           reportsToPrint={batchReportsSelected}
           onClose={() => setShowBatchPrint(false)}
+          batchPrintedMode={batchPrintMode}
         />
       )}
 
@@ -414,7 +416,7 @@ function AppContent() {
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border p-6 max-w-md w-full shadow-2xl space-y-4 text-left">
             <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
-              <Printer className="w-5 h-5 text-emerald-605 text-emerald-600" />
+              <Printer className="w-5 h-5 text-emerald-600" />
               <div>
                 <h4 className="font-bold text-sm text-gray-950 uppercase tracking-wide">Impressão em Lote (PDF)</h4>
                 <p className="text-[10px] text-gray-500 uppercase tracking-tight font-semibold">Defina o período dos diários finalizados</p>
@@ -440,6 +442,37 @@ function AppContent() {
                   onChange={(e) => setBatchEndDate(e.target.value)}
                   className="w-full h-9 rounded-lg border-gray-200 border text-xs px-2.5 text-gray-700 focus:ring-1 focus:ring-emerald-500 outline-none"
                 />
+              </div>
+            </div>
+
+            {/* Modo de Exportação */}
+            <div className="space-y-1.5">
+              <label className="block text-[10px] uppercase font-bold text-gray-500">Formato do PDF resultante</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBatchPrintMode("single")}
+                  className={`py-2 px-1 rounded-xl border text-center transition-all cursor-pointer font-bold text-xs uppercase tracking-wide flex flex-col items-center justify-center gap-0.5 min-h-12 ${
+                    batchPrintMode === "single"
+                      ? "border-emerald-600 bg-emerald-50/50 text-emerald-800"
+                      : "border-gray-200 text-gray-500 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="font-bold text-[10px]">Arquivo Único</span>
+                  <span className="text-[8px] font-medium text-gray-400 normal-case">Todos os dias juntos</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBatchPrintMode("individual")}
+                  className={`py-2 px-1 rounded-xl border text-center transition-all cursor-pointer font-bold text-xs uppercase tracking-wide flex flex-col items-center justify-center gap-0.5 min-h-12 ${
+                    batchPrintMode === "individual"
+                      ? "border-emerald-600 bg-emerald-50/50 text-emerald-800"
+                      : "border-gray-200 text-gray-500 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="font-bold text-[10px]">Arquivos Separados</span>
+                  <span className="text-[8px] font-medium text-gray-400 normal-case">Separado por dia</span>
+                </button>
               </div>
             </div>
 
