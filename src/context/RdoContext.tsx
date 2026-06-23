@@ -258,11 +258,11 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [currentObra]);
 
-  // Fetch Reports when User changes
+  // Fetch Reports when User or currentObra changes
   useEffect(() => {
     if (isLoading) return;
 
-    if (!user) {
+    if (!user || !currentObra) {
       setReports([]);
       setCurrentReport(null);
       return;
@@ -275,8 +275,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         try {
           const q = query(
             collection(db, path),
-            where("userId", "==", user.uid),
-            orderBy("data", "desc")
+            where("obraId", "==", currentObra.id)
           );
           const snapshot = await getDocs(q);
           const loaded: RdoReport[] = [];
@@ -289,9 +288,16 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               status: rData.status || "Em Digitação"
             } as RdoReport);
           });
+          
+          loaded.sort((a, b) => b.data.localeCompare(a.data));
+          
           setReports(loaded);
           if (loaded.length > 0) {
-            setCurrentReport(loaded[0]);
+             const storedCurrentRdoId = localStorage.getItem("rdo_current_report_id");
+             const found = loaded.find(r => r.id === storedCurrentRdoId);
+             setCurrentReport(found || loaded[0]);
+          } else {
+             setCurrentReport(null);
           }
         } catch (error) {
           console.error("Firebase fetch failed, falling back to local:", error);
@@ -305,7 +311,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } else {
       loadLocalReports();
     }
-  }, [user, isLoading, activeIsFirebase]);
+  }, [user, isLoading, activeIsFirebase, currentObra?.id]);
 
   const loadLocalReports = () => {
     const raw = localStorage.getItem(LOCAL_REPORTS_KEY);
