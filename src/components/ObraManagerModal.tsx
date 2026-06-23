@@ -47,7 +47,7 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
   
   // Permission temp fields
   const [newPermEmail, setNewPermEmail] = useState("");
-  const [newPermAccess, setNewPermAccess] = useState<"view" | "edit">("view");
+  const [newPermAccess, setNewPermAccess] = useState<"view" | "edit" | "fiscalizacao">("view");
 
   // Activity temp fields
   const [newActRef, setNewActRef] = useState("");
@@ -700,11 +700,12 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
                 />
                 <select
                   value={newPermAccess}
-                  onChange={(e) => setNewPermAccess(e.target.value as "view" | "edit")}
+                  onChange={(e) => setNewPermAccess(e.target.value as "view" | "edit" | "fiscalizacao")}
                   className="bg-white border border-slate-300 rounded p-2 text-xs outline-none focus:ring-1 focus:ring-amber-500 font-semibold"
                 >
                   <option value="view">Visualização</option>
                   <option value="edit">Edição</option>
+                  <option value="fiscalizacao">Fiscalização</option>
                 </select>
                 <button
                   type="button"
@@ -732,9 +733,13 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
                           <td className="px-3.5 py-2 font-medium">{p.email}</td>
                           <td className="px-3.5 py-2">
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold leading-none ${
-                              p.access === "edit" ? "bg-blue-50 text-blue-700 border border-blue-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              p.access === "edit" ? "bg-blue-50 text-blue-700 border border-blue-200" :
+                              p.access === "fiscalizacao" ? "bg-amber-50 text-amber-700 border border-amber-200" : 
+                              "bg-emerald-50 text-emerald-700 border border-emerald-200"
                             }`}>
-                              {p.access === "edit" ? "EDIÇÃO (ESCRITA)" : "LEITURA (VISUALIZAÇÃO)"}
+                              {p.access === "edit" ? "EDIÇÃO (ESCRITA)" : 
+                               p.access === "fiscalizacao" ? "FISCALIZAÇÃO" : 
+                               "LEITURA (VISUALIZAÇÃO)"}
                             </span>
                           </td>
                           <td className="px-3.5 py-2 text-right">

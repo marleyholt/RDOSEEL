@@ -120,7 +120,7 @@ export const DEFAULT_REPORTS: RdoReport[] = [
     data: "2019-05-08",
     obra: "BUILDING",
     cliente: "XWS",
-    gestor: "João Medeiros",
+    gestor: "",
     gerenciadora: "SABESP",
     prazo: 1461,
     prazoIncorrido: 1224,
@@ -350,10 +350,10 @@ export const DEFAULT_REPORTS: RdoReport[] = [
       "Alteração de escopo necessária. (1 imagem) (arquivo anexo: \"Certificado_Calibração_Interna.pdf\"; \"PLANILHA-16-03-2020.xlsx\")",
       "Edição texto conforme solicitação do cliente."
     ],
-    emitenteNome: "João Medeiros",
+    emitenteNome: "",
     emitenteConsolidado: "Consolidado em 17/11/2021 14:10:00 por usuarioteste",
     emitenteHash: "ff2b2060a7b8e8ae496a9553579effac",
-    contratanteNome: "José Torres",
+    contratanteNome: "",
     contratanteAprovado: "Aprovado em 17/11/2021 14:17:12 por clienteteste3",
     contratanteHash: "29381edd9b0233ff2655f9571859320a"
   }

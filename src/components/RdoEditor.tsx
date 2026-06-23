@@ -39,11 +39,21 @@ interface RdoEditorProps {
 }
 
 export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
-  const { currentReport, setCurrentReport, saveReport, isFirebase, obras, reports } = useRdoStore();
+  const { currentReport, setCurrentReport, saveReport, isFirebase, obras, reports, user, currentObra } = useRdoStore();
   const [activeTab, setActiveTab] = useState<"geral" | "atividades" | "paralisacoes" | "efetivo" | "equipamentos" | "anexos">("geral");
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [cloneType, setCloneType] = useState<"efetivo" | "equipamentos" | null>(null);
+
+  const currentUserEmail = user && 'email' in user ? (user.email?.toLowerCase() || "") : "";
+  const permission = currentObra?.permissoes?.find(p => p.email.toLowerCase() === currentUserEmail);
+  const accessLevel = currentObra?.userId === user?.uid ? "owner" : (permission?.access || "view");
+
+  const isReadOnly = accessLevel === "view" || (!user && !isFirebase); // If logged out locally, fallback read-only
+  const isFiscalizacao = accessLevel === "fiscalizacao";
+  const isEditor = accessLevel === "edit" || accessLevel === "owner";
+  
+  const hasFiscal = currentObra?.permissoes?.some(p => p.access === "fiscalizacao") || false;
 
   // Check if current date in currentRdo is already taken by another RDO of same Obra
   const hasDuplicateDate = React.useMemo(() => {
@@ -572,76 +582,82 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
             </span>
           )}
           
-          <button
-            onClick={async () => {
-              const nextStatus = currentReport.status === "Finalizado" ? "Em Digitação" : "Finalizado";
-              
-              setSaving(true);
-              setSaveSuccess(false);
-              try {
-                // Auto compute total labor from detailed board
-                let computedMoi = 0;
-                let computedMod = 0;
-                currentReport.efetivoDetalhado.forEach(g => {
-                  g.items.forEach(itm => {
-                    if (itm.moiMod === "MOI") computedMoi += Number(itm.c || 0) - Number(itm.f || 0);
-                    if (itm.moiMod === "MOD") computedMod += Number(itm.c || 0) - Number(itm.f || 0);
-                  });
-                });
+          {isEditor && (
+            <>
+              <button
+                onClick={async () => {
+                  const nextStatus = currentReport.status === "Finalizado" ? "Em Digitação" : "Finalizado";
+                  
+                  setSaving(true);
+                  setSaveSuccess(false);
+                  try {
+                    // Auto compute total labor from detailed board
+                    let computedMoi = 0;
+                    let computedMod = 0;
+                    currentReport.efetivoDetalhado.forEach(g => {
+                      g.items.forEach(itm => {
+                        if (itm.moiMod === "MOI") computedMoi += Number(itm.c || 0) - Number(itm.f || 0);
+                        if (itm.moiMod === "MOD") computedMod += Number(itm.c || 0) - Number(itm.f || 0);
+                      });
+                    });
 
-                // Auto compute total equipment from detailed table
-                const computedEqTotal = currentReport.equipamentosDetalhado.reduce((sum, q) => sum + Number(q.quantidade || 0), 0);
+                    // Auto compute total equipment from detailed table
+                    const computedEqTotal = currentReport.equipamentosDetalhado.reduce((sum, q) => sum + Number(q.quantidade || 0), 0);
 
-                const computedElapsed = Number(currentReport.prazoIncorrido || 0);
-                const computedRemaining = Math.max(0, Number(currentReport.prazo || 0) - computedElapsed);
-                const computedAccumulatedRain = calculateAccumulatedMonthRain();
+                    const computedElapsed = Number(currentReport.prazoIncorrido || 0);
+                    const computedRemaining = Math.max(0, Number(currentReport.prazo || 0) - computedElapsed);
+                    const computedAccumulatedRain = calculateAccumulatedMonthRain();
 
-                await saveReport({
-                  ...currentReport,
-                  status: nextStatus,
-                  prazoFaltante: computedRemaining,
-                  precipitacao: {
-                    ...currentReport.precipitacao,
-                    acumuladoMes: computedAccumulatedRain
-                  },
-                  efetivoSummary: {
-                    ...currentReport.efetivoSummary,
-                    moi: computedMoi,
-                    mod: computedMod,
-                    total: computedMoi + computedMod + Number(currentReport.efetivoSummary.subcontratadosMoiMod || 0)
-                  },
-                  equipamentosSummary: {
-                    ...currentReport.equipamentosSummary,
-                    total: computedEqTotal,
-                    mobilizados: computedEqTotal
+                    await saveReport({
+                      ...currentReport,
+                      status: nextStatus,
+                      prazoFaltante: computedRemaining,
+                      precipitacao: {
+                        ...currentReport.precipitacao,
+                        acumuladoMes: computedAccumulatedRain
+                      },
+                      efetivoSummary: {
+                        ...currentReport.efetivoSummary,
+                        moi: computedMoi,
+                        mod: computedMod,
+                        total: computedMoi + computedMod + Number(currentReport.efetivoSummary.subcontratadosMoiMod || 0)
+                      },
+                      equipamentosSummary: {
+                        ...currentReport.equipamentosSummary,
+                        total: computedEqTotal,
+                        mobilizados: computedEqTotal
+                      }
+                    });
+                    setSaveSuccess(true);
+                    setTimeout(() => setSaveSuccess(false), 3000);
+                  } catch (err) {
+                    console.error(err);
+                  } finally {
+                    setSaving(false);
                   }
-                });
-                setSaveSuccess(true);
-                setTimeout(() => setSaveSuccess(false), 3000);
-              } catch (err) {
-                console.error(err);
-              } finally {
-                setSaving(false);
-              }
-            }}
-            className={`h-8 flex items-center gap-1.5 px-3 font-bold text-[11px] uppercase tracking-wide rounded transition-all shadow-xs text-white ${
-              currentReport.status === "Finalizado" 
-                ? "bg-slate-700 hover:bg-slate-800" 
-                : "bg-[#004899] hover:bg-[#003c80]"
-            }`}
-          >
-            <CheckCircle className="w-3.5 h-3.5" />
-            {currentReport.status === "Finalizado" ? "Reabrir RDO" : "Finalizar RDO"}
-          </button>
+                }}
+                disabled={saving || (hasFiscal && currentReport.status !== "Finalizado" && !currentReport.fiscalizacaoFinalizada)}
+                className={`h-8 flex items-center gap-1.5 px-3 font-bold text-[11px] uppercase tracking-wide rounded transition-all shadow-xs text-white ${
+                  currentReport.status === "Finalizado" 
+                    ? "bg-slate-700 hover:bg-slate-800" 
+                    : "bg-[#004899] hover:bg-[#003c80] disabled:opacity-50 disabled:bg-slate-400"
+                }`}
+                title={hasFiscal && !currentReport.fiscalizacaoFinalizada && currentReport.status !== "Finalizado" ? "A fiscalização precisa finalizar o comentário primeiro" : ""}
+              >
+                <CheckCircle className="w-3.5 h-3.5" />
+                {currentReport.status === "Finalizado" ? "Reabrir RDO" : "Finalizar RDO"}
+              </button>
 
-          <button
-            onClick={handleSave}
-            disabled={saving || currentReport.status === "Finalizado"}
-            className="h-8 flex items-center gap-1 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-[11px] uppercase tracking-wide rounded transition-all shadow-xs"
-          >
-            <Save className="w-3.5 h-3.5" />
-            {saving ? "Salvando..." : "Salvar Rascunho"}
-          </button>
+              <button
+                onClick={handleSave}
+                disabled={saving || currentReport.status === "Finalizado"}
+                className="h-8 flex items-center gap-1 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-[11px] uppercase tracking-wide rounded transition-all shadow-xs"
+              >
+                <Save className="w-3.5 h-3.5" />
+                {saving ? "Salvando..." : "Salvar Rascunho"}
+              </button>
+            </>
+          )}
           
           <button
             onClick={onShowPrint}
@@ -698,11 +714,11 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
           </div>
         )}
 
-        <div className={currentReport.status === "Finalizado" ? "pointer-events-none select-none opacity-85" : ""}>
+        <div className={isReadOnly || currentReport.status === "Finalizado" || isFiscalizacao ? "opacity-90" : ""}>
         
         {/* ================== TAB: GERAL ================== */}
         {activeTab === "geral" && (
-          <div className="space-y-5">
+          <fieldset disabled={isReadOnly || currentReport.status === "Finalizado" || isFiscalizacao} className="space-y-5">
             <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1.5 font-sans">Dados Gerais e Identificação</h3>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -774,7 +790,7 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
                   value={currentReport.gestor}
                   onChange={(e) => updateReport({ gestor: e.target.value })}
                   className="block h-8 w-full rounded border-slate-300 text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-slate-50/40 hover:bg-slate-50/10 transition-colors"
-                  placeholder="João Medeiros"
+                  placeholder="Nome do Gestor"
                 />
               </div>
 
@@ -844,7 +860,7 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
                 />
               </div>
             </div>
-          </div>
+          </fieldset>
         )}
 
         {/* ================== TAB: ATIVIDADES ================== */}
@@ -853,7 +869,7 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
           const registered = associatedObra?.atividades || [];
 
           return (
-            <div className="space-y-5 animate-fade-in font-sans">
+            <fieldset disabled={isReadOnly || currentReport.status === "Finalizado" || isFiscalizacao} className="space-y-5 animate-fade-in font-sans">
               <div className="flex justify-between items-center border-b border-slate-200 pb-1.5 matches-pattern">
                 <div>
                   <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Fases e Atividades Executadas (Anexar Fotos)</h3>
@@ -1053,13 +1069,13 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
                 Nenhuma atividade cadastrada. Use o botão no topo direito para criar!
               </div>
             )}
-          </div>
+          </fieldset>
           );
         })()}
 
         {/* ================== TAB: PARALISAÇÕES & CLIMA ================== */}
         {activeTab === "paralisacoes" && (
-          <div className="space-y-5 animate-fade-in">
+          <fieldset disabled={isReadOnly || currentReport.status === "Finalizado" || isFiscalizacao} className="space-y-5 animate-fade-in">
             <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1.5">Fatos Relevantes e Eventos de Obra</h3>
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-tight mb-1">Anotações Extraordinárias (Um evento completo por linha)</label>
@@ -1201,7 +1217,7 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
                 </div>
               </div>
             </div>
-          </div>
+          </fieldset>
         )}
 
         {/* ================== TAB: EFETIVO ================== */}
@@ -1210,7 +1226,7 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
           const registeredSubs = associatedObra?.subcontratadas || [];
           
           return (
-            <div className="space-y-5 animate-fade-in font-sans">
+            <fieldset disabled={isReadOnly || currentReport.status === "Finalizado" || isFiscalizacao} className="space-y-5 animate-fade-in font-sans">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-1.5 matches-pattern">
                 <div>
                   <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Quadro de Efetivo de Obra</h3>
@@ -1376,13 +1392,13 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
             <div className="bg-amber-500/10 border border-amber-200/50 p-3 rounded text-[11px] text-amber-900 leading-normal font-semibold">
               <strong>Procedimento de consolidamento automático:</strong> O sistema realizará a soma matemática dos trabalhadores ativos (C - F) no quadro detalhado para preencher a seção resumitiva dos diários de obras ao salvar!
             </div>
-          </div>
+          </fieldset>
           );
         })()}
 
         {/* ================== TAB: EQUIPAMENTOS ================== */}
         {activeTab === "equipamentos" && (
-          <div className="space-y-5 animate-fade-in">
+          <fieldset disabled={isReadOnly || currentReport.status === "Finalizado" || isFiscalizacao} className="space-y-5 animate-fade-in">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-1.5 font-sans">
               <div>
                 <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Equipamentos Mobilizados Detalhes</h3>
@@ -1472,75 +1488,15 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
               </div>
             </div>
 
-            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1.5 pt-2">Comentários Adicionais de Fiscalização</h3>
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-tight mb-1">Anotações da Gerenciadora / Contratante (Um completo por linha)</label>
-              <textarea
-                value={currentReport.comentariosGerenciadoraContratante.join("\n")}
-                onChange={(e) => updateReport({ 
-                  comentariosGerenciadoraContratante: e.target.value.split("\n").filter(line => line.trim() !== "") 
-                })}
-                rows={2}
-                className="block w-full rounded border-slate-300 shadow-xs focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-xs text-slate-800 bg-slate-50/20"
-                placeholder="Ex: 001 - Reparos hidráulicos necessários..."
-              />
-            </div>
 
-            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1.5 pt-2">Firmas e Signatários Responsáveis</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-3.5 bg-white rounded border border-slate-200 space-y-3 shadow-xs">
-                <span className="font-bold text-xs uppercase tracking-wide text-amber-700 block border-b border-slate-150 pb-1">Emitente Emissor (João Medeiros)</span>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase">Nome do Engenheiro</label>
-                  <input
-                    type="text"
-                    value={currentReport.emitenteNome}
-                    onChange={(e) => updateReport({ emitenteNome: e.target.value })}
-                    className="mt-0.5 block h-8 w-full rounded border-slate-300 text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase">Linha de Consolidação de Assinatura</label>
-                  <input
-                    type="text"
-                    value={currentReport.emitenteConsolidado}
-                    onChange={(e) => updateReport({ emitenteConsolidado: e.target.value })}
-                    className="mt-0.5 block h-8 w-full rounded border-slate-300 text-xs text-slate-600 bg-slate-100/50 font-mono focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-                    placeholder="Consolidado em ... por ..."
-                  />
-                </div>
-              </div>
-
-              <div className="p-3.5 bg-white rounded border border-slate-200 space-y-3 shadow-xs">
-                <span className="font-bold text-xs uppercase tracking-wide text-amber-700 block border-b border-slate-150 pb-1">Fiscal Contratante (José Torres)</span>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase">Nome do Aprovador</label>
-                  <input
-                    type="text"
-                    value={currentReport.contratanteNome}
-                    onChange={(e) => updateReport({ contratanteNome: e.target.value })}
-                    className="mt-0.5 block h-8 w-full rounded border-slate-300 text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase">Linha de Aprovação</label>
-                  <input
-                    type="text"
-                    value={currentReport.contratanteAprovado}
-                    onChange={(e) => updateReport({ contratanteAprovado: e.target.value })}
-                    className="mt-0.5 block h-8 w-full rounded border-slate-300 text-xs text-slate-600 bg-slate-100/50 font-mono focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-                    placeholder="Aprovado em ... por ..."
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
+          </fieldset>
         )}
 
         {/* ================== TAB: ANEXOS ================== */}
         {activeTab === "anexos" && (
-          <div className="space-y-4">
-            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1.5 font-sans">Anexos Documentais</h3>
+          <div className="space-y-6">
+            <fieldset disabled={isReadOnly || currentReport.status === "Finalizado" || isFiscalizacao} className="space-y-4">
+              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1.5 font-sans">Anexos Documentais</h3>
             <p className="text-[11px] text-slate-500 mb-2 font-sans">Insira imagens (fotos, projetos, recibos) ou arquivos PDF para serem anexados como páginas complementares no documento impresso/PDF do RDO.</p>
             
             <div className="border border-dashed border-slate-300 rounded-xl p-4 bg-slate-50/50 flex flex-col items-center justify-center text-center space-y-3 relative">
@@ -1616,6 +1572,100 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
                 })}
               </div>
             )}
+            </fieldset>
+
+            <fieldset disabled={isReadOnly || currentReport.status === "Finalizado" || (isFiscalizacao && currentReport.fiscalizacaoFinalizada)} className={`space-y-4 pt-4 mt-4 border-t border-slate-200 ${isFiscalizacao && !currentReport.fiscalizacaoFinalizada ? 'ring-2 ring-amber-500 rounded p-4 bg-amber-50/30' : ''}`}>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1.5 flex-1">Comentários Adicionais de Fiscalização</h3>
+                {isFiscalizacao && !currentReport.fiscalizacaoFinalizada && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        setSaving(true);
+                        await saveReport({
+                          ...currentReport,
+                          fiscalizacaoFinalizada: true
+                        });
+                        alert("Comentário finalizado e aprovado com sucesso!");
+                      } catch (err) {
+                        console.error(err);
+                        alert("Erro ao salvar comentário.");
+                      } finally {
+                        setSaving(false);
+                      }
+                    }}
+                    className="ml-4 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
+                  >
+                    Salvar e Finalizar Comentário
+                  </button>
+                )}
+              </div>
+              
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-tight mb-1">Anotações da Gerenciadora / Contratante (Um completo por linha)</label>
+                <textarea
+                  value={currentReport.comentariosGerenciadoraContratante.join("\n")}
+                  onChange={(e) => updateReport({ 
+                    comentariosGerenciadoraContratante: e.target.value.split("\n").filter(line => line.trim() !== "") 
+                  })}
+                  rows={2}
+                  className="block w-full rounded border-slate-300 shadow-xs focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-xs text-slate-800 bg-slate-50/20"
+                  placeholder="Ex: 001 - Reparos hidráulicos necessários..."
+                />
+              </div>
+            </fieldset>
+
+            <fieldset disabled={isReadOnly || currentReport.status === "Finalizado" || isFiscalizacao} className="space-y-4 pt-4 mt-4 border-t border-slate-200">
+              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1.5 pt-2">Firmas e Signatários Responsáveis</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-3.5 bg-white rounded border border-slate-200 space-y-3 shadow-xs">
+                  <span className="font-bold text-xs uppercase tracking-wide text-amber-700 block border-b border-slate-150 pb-1">Emitente Emissor</span>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Nome do Engenheiro</label>
+                    <input
+                      type="text"
+                      value={currentReport.emitenteNome}
+                      onChange={(e) => updateReport({ emitenteNome: e.target.value })}
+                      className="mt-0.5 block h-8 w-full rounded border-slate-300 text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Linha de Consolidação de Assinatura</label>
+                    <input
+                      type="text"
+                      value={currentReport.emitenteConsolidado}
+                      onChange={(e) => updateReport({ emitenteConsolidado: e.target.value })}
+                      className="mt-0.5 block h-8 w-full rounded border-slate-300 text-xs text-slate-600 bg-slate-100/50 font-mono focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                      placeholder="Consolidado em ... por ..."
+                    />
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-white rounded border border-slate-200 space-y-3 shadow-xs">
+                  <span className="font-bold text-xs uppercase tracking-wide text-amber-700 block border-b border-slate-150 pb-1">Fiscal Contratante</span>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Nome do Aprovador</label>
+                    <input
+                      type="text"
+                      value={currentReport.contratanteNome}
+                      onChange={(e) => updateReport({ contratanteNome: e.target.value })}
+                      className="mt-0.5 block h-8 w-full rounded border-slate-300 text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Linha de Aprovação</label>
+                    <input
+                      type="text"
+                      value={currentReport.contratanteAprovado}
+                      onChange={(e) => updateReport({ contratanteAprovado: e.target.value })}
+                      className="mt-0.5 block h-8 w-full rounded border-slate-300 text-xs text-slate-600 bg-slate-100/50 font-mono focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                      placeholder="Aprovado em ... por ..."
+                    />
+                  </div>
+                </div>
+              </div>
+            </fieldset>
+
           </div>
         )}
 

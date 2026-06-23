@@ -136,6 +136,7 @@ export interface RdoReport {
   efetivoDetalhado: CompanyLaborGroup[];
   equipamentosDetalhado: EquipmentMobilizedDetail[];
   comentariosGerenciadoraContratante: string[];
+  fiscalizacaoFinalizada?: boolean; // Tracking if fiscalização has been approved/finalized
   
   // Signatures
   emitenteNome: string;
@@ -160,7 +161,7 @@ export interface ObraActivity {
 
 export interface ObraPermission {
   email: string;
-  access: "view" | "edit";
+  access: "view" | "edit" | "fiscalizacao";
 }
 
 export interface ObraConfig {

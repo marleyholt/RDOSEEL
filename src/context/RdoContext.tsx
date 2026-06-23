@@ -686,7 +686,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         status: "Em Digitação",
         cliente: currentObra.cliente,
         contratada: currentObra.contratada || "SEEL SERVIÇOS DE ENGENHARIA LTDA",
-        gestor: "João Medeiros",
+        gestor: "",
         gerenciadora: currentObra.gerenciadora,
         prazo: totalPeriodDays,
         prazoIncorrido: incorrido,
@@ -735,10 +735,10 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         efetivoDetalhado: effectiveLabor,
         equipamentosDetalhado: [],
         comentariosGerenciadoraContratante: [],
-        emitenteNome: "João Medeiros",
+        emitenteNome: "",
         emitenteConsolidado: "",
         emitenteHash: "ff2b2060a7b8e8ae496a9553579effac",
-        contratanteNome: "José Torres",
+        contratanteNome: "",
         contratanteAprovado: "",
         contratanteHash: "29381edd9b0233ff2655f9571859320a"
       };
@@ -766,7 +766,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: "Em Digitação",
       cliente: "SABESP",
       contratada: "SEEL SERVIÇOS DE ENGENHARIA LTDA",
-      gestor: "João Medeiros",
+      gestor: "",
       gerenciadora: "SEEL",
       prazo: 365,
       prazoIncorrido: 100,
@@ -825,10 +825,10 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       efetivoDetalhado: defaultLabor,
       equipamentosDetalhado: [],
       comentariosGerenciadoraContratante: [],
-      emitenteNome: "João Medeiros",
+      emitenteNome: "",
       emitenteConsolidado: "",
       emitenteHash: "ff2b2060a7b8e8ae496a9553579effac",
-      contratanteNome: "José Torres",
+      contratanteNome: "",
       contratanteAprovado: "",
       contratanteHash: "29381edd9b0233ff2655f9571859320a"
     };
