@@ -838,7 +838,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const saveObra = async (obra: ObraConfig) => {
     if (!user) throw new Error("Usuário não autenticado");
 
-    const permissionsEmails = (obra.permissoes || []).map(p => p.email.trim().toLowerCase());
+    const permissionsEmails = (obra.permissoes || []).map(p => p?.email?.trim().toLowerCase()).filter(Boolean);
     const obraToSave = {
       ...obra,
       userId: obra.userId || user.uid,

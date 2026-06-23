@@ -107,9 +107,9 @@ function AppContent() {
 
   // Filter RDO reports based on search, status AND worksite selection
   const filteredReports = reports.filter(r => {
-    const matchesSearch = r.rdoNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          r.obra.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          r.data.includes(searchTerm);
+    const matchesSearch = (r.rdoNo || "").toLowerCase().includes((searchTerm || "").toLowerCase()) ||
+                          (r.obra || "").toLowerCase().includes((searchTerm || "").toLowerCase()) ||
+                          (r.data || "").includes(searchTerm || "");
     const matchesStatus = statusFilter === "todos" || (r.status || "Em Digitação") === statusFilter;
     if (currentObra) {
       return matchesSearch && matchesStatus && r.obraId === currentObra.id;

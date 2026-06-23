@@ -46,7 +46,7 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
   const [cloneType, setCloneType] = useState<"efetivo" | "equipamentos" | null>(null);
 
   const currentUserEmail = user && 'email' in user ? (user.email?.toLowerCase() || "") : "";
-  const permission = currentObra?.permissoes?.find(p => p.email.toLowerCase() === currentUserEmail);
+  const permission = currentObra?.permissoes?.find(p => p?.email?.toLowerCase() === currentUserEmail);
   const accessLevel = currentObra?.userId === user?.uid ? "owner" : (permission?.access || "view");
 
   const isReadOnly = accessLevel === "view" || (!user && !isFirebase); // If logged out locally, fallback read-only
@@ -1080,7 +1080,7 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-tight mb-1">Anotações Extraordinárias (Um evento completo por linha)</label>
               <textarea
-                value={currentReport.fatosRelevantes.join("\n")}
+                value={(currentReport.fatosRelevantes || []).join("\n")}
                 onChange={(e) => updateReport({ fatosRelevantes: e.target.value.split("\n").filter(line => line.trim() !== "") })}
                 rows={3}
                 className="block w-full rounded border-slate-300 shadow-xs focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-xs text-slate-800 bg-slate-50/20"
@@ -1604,7 +1604,7 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-tight mb-1">Anotações da Gerenciadora / Contratante (Um completo por linha)</label>
                 <textarea
-                  value={currentReport.comentariosGerenciadoraContratante.join("\n")}
+                  value={(currentReport.comentariosGerenciadoraContratante || []).join("\n")}
                   onChange={(e) => updateReport({ 
                     comentariosGerenciadoraContratante: e.target.value.split("\n").filter(line => line.trim() !== "") 
                   })}

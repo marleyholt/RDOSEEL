@@ -278,7 +278,7 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
       return;
     }
 
-    if (permissoes.some(p => p.email.toLowerCase() === emailLower)) {
+    if (permissoes.some(p => p?.email?.toLowerCase() === emailLower)) {
       alert("Este e-mail já possui permissão configurada nesta obra.");
       return;
     }
