@@ -40,14 +40,14 @@ interface RdoEditorProps {
 
 export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
   const { currentReport, setCurrentReport, saveReport, isFirebase, obras, reports, user, currentObra } = useRdoStore();
-  const [activeTab, setActiveTab] = useState<"geral" | "atividades" | "paralisacoes" | "efetivo" | "equipamentos" | "anexos">("geral");
+  const [activeTab, setActiveTab] = useState<"geral" | "atividades" | "paralisacoes" | "efetivo" | "equipamentos" | "anexos" | "assinaturas">("geral");
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [cloneType, setCloneType] = useState<"efetivo" | "equipamentos" | null>(null);
 
   const currentUserEmail = user && 'email' in user ? (user.email?.toLowerCase() || "") : "";
   const permission = currentObra?.permissoes?.find(p => p?.email?.toLowerCase() === currentUserEmail);
-  const accessLevel = currentObra?.userId === user?.uid ? "owner" : (permission?.access || "view");
+  const accessLevel = permission ? permission.access : (currentObra?.userId === user?.uid ? "owner" : "view");
 
   const isReadOnly = accessLevel === "view" || (!user && !isFirebase); // If logged out locally, fallback read-only
   const isFiscalizacao = accessLevel === "fiscalizacao";
@@ -96,7 +96,7 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
 
   const handleSave = async () => {
     if (hasDuplicateDate) {
-      const formattedDate = currentReport.data.split('-').reverse().join('/');
+      const formattedDate = (currentReport.data || "").split('-').reverse().join('/');
       alert(`Já existe um RDO cadastrado para o dia ${formattedDate} nesta obra! Por favor, use outra data para poder salvar.`);
       return;
     }
@@ -677,6 +677,7 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
           { id: "efetivo", label: "Quadro de Efetivo", icon: Users },
           { id: "equipamentos", label: "Equipamentos", icon: Wrench },
           { id: "anexos", label: "Anexos Documentais", icon: ImageIcon },
+          { id: "assinaturas", label: "Aprovações e Assinaturas", icon: CheckCircle },
         ].map((tab) => {
           const Icon = tab.icon;
           const isSelected = activeTab === tab.id;
@@ -1090,7 +1091,7 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
 
             <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1.5 pt-2">Registro de Horas por Tipo de Paralisação</h3>
             <div className="space-y-3">
-              {Object.entries(currentReport.paralisacoesDetalhe).map(([catKey, rowVal]) => {
+              {Object.entries(currentReport.paralisacoesDetalhe || {}).map(([catKey, rowVal]) => {
                 const row = rowVal as StoppageDetailRow;
                 const isChecked = row.ativo;
                 return (
@@ -1274,7 +1275,7 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
               </div>
 
               <div className="space-y-4">
-                {currentReport.efetivoDetalhado.map((group, gIdx) => (
+                {(currentReport.efetivoDetalhado || []).map((group, gIdx) => (
                   <div key={group.id || gIdx} className="bg-white rounded border border-slate-200 overflow-hidden shadow-xs">
                     <div className="bg-slate-900 px-3.5 py-2 flex justify-between items-center text-white">
                       <input
@@ -1438,7 +1439,7 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-150 bg-white">
-                  {currentReport.equipamentosDetalhado && currentReport.equipamentosDetalhado.length > 0 ? (
+                  {(currentReport.equipamentosDetalhado && currentReport.equipamentosDetalhado.length > 0) ? (
                     currentReport.equipamentosDetalhado.map((eq, idx) => (
                       <tr key={eq.id || idx}>
                         <td className="p-1.5">
@@ -1574,30 +1575,55 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
             )}
             </fieldset>
 
-            <fieldset disabled={isReadOnly || currentReport.status === "Finalizado" || (isFiscalizacao && currentReport.fiscalizacaoFinalizada)} className={`space-y-4 pt-4 mt-4 border-t border-slate-200 ${isFiscalizacao && !currentReport.fiscalizacaoFinalizada ? 'ring-2 ring-amber-500 rounded p-4 bg-amber-50/30' : ''}`}>
+          </div>
+        )}
+
+        {activeTab === "assinaturas" && (
+          <div className="space-y-6 animate-fade-in pb-8">
+            <fieldset disabled={isReadOnly || currentReport.status === "Finalizado" || (isFiscalizacao && currentReport.fiscalizacaoFinalizada)} className={`space-y-4 ${isFiscalizacao && !currentReport.fiscalizacaoFinalizada ? 'ring-2 ring-amber-500 rounded p-4 bg-amber-50/30' : ''}`}>
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1.5 flex-1">Comentários Adicionais de Fiscalização</h3>
                 {isFiscalizacao && !currentReport.fiscalizacaoFinalizada && (
-                  <button
-                    onClick={async () => {
-                      try {
-                        setSaving(true);
-                        await saveReport({
-                          ...currentReport,
-                          fiscalizacaoFinalizada: true
-                        });
-                        alert("Comentário finalizado e aprovado com sucesso!");
-                      } catch (err) {
-                        console.error(err);
-                        alert("Erro ao salvar comentário.");
-                      } finally {
-                        setSaving(false);
-                      }
-                    }}
-                    className="ml-4 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
-                  >
-                    Salvar e Finalizar Comentário
-                  </button>
+                  <div className="flex gap-2 ml-4">
+                    <button
+                      onClick={async () => {
+                        try {
+                          setSaving(true);
+                          await saveReport(currentReport);
+                          setSaveSuccess(true);
+                          setTimeout(() => setSaveSuccess(false), 3000);
+                        } catch (err) {
+                          console.error(err);
+                          alert("Erro ao salvar rascunho do comentário.");
+                        } finally {
+                          setSaving(false);
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-[#004899] hover:bg-[#003c80] text-white rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
+                    >
+                      {saving ? "Salvando..." : "Salvar Rascunho"}
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          setSaving(true);
+                          await saveReport({
+                            ...currentReport,
+                            fiscalizacaoFinalizada: true
+                          });
+                          alert("Comentário finalizado! O emissor já pode finalizar o documento.");
+                        } catch (err) {
+                          console.error(err);
+                          alert("Erro ao salvar comentário.");
+                        } finally {
+                          setSaving(false);
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
+                    >
+                      Salvar e Finalizar Comentário
+                    </button>
+                  </div>
                 )}
               </div>
               
@@ -1608,14 +1634,14 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
                   onChange={(e) => updateReport({ 
                     comentariosGerenciadoraContratante: e.target.value.split("\n").filter(line => line.trim() !== "") 
                   })}
-                  rows={2}
+                  rows={4}
                   className="block w-full rounded border-slate-300 shadow-xs focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-xs text-slate-800 bg-slate-50/20"
                   placeholder="Ex: 001 - Reparos hidráulicos necessários..."
                 />
               </div>
             </fieldset>
 
-            <fieldset disabled={isReadOnly || currentReport.status === "Finalizado" || isFiscalizacao} className="space-y-4 pt-4 mt-4 border-t border-slate-200">
+            <fieldset disabled={isReadOnly || currentReport.status === "Finalizado" || isFiscalizacao} className="space-y-4 pt-6 mt-6 border-t border-slate-200">
               <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1.5 pt-2">Firmas e Signatários Responsáveis</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="p-3.5 bg-white rounded border border-slate-200 space-y-3 shadow-xs">

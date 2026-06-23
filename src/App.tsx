@@ -115,7 +115,7 @@ function AppContent() {
       return matchesSearch && matchesStatus && r.obraId === currentObra.id;
     }
     return matchesSearch && matchesStatus;
-  }).sort((a, b) => b.data.localeCompare(a.data));
+  }).sort((a, b) => (b.data || "").localeCompare(a.data || ""));
 
   // Collect all finalized reports for the active worksite to print in batch
   const handleCreateNewRdo = async () => {

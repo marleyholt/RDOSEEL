@@ -398,7 +398,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     if (isDuplicate) {
-      const formattedDate = report.data.split('-').reverse().join('/');
+      const formattedDate = (report.data || "").split('-').reverse().join('/');
       alert(`Já existe um RDO cadastrado para o dia ${formattedDate} nesta obra! Por favor, escolha outra data.`);
       throw new Error(`Data duplicada: RDO já existe para ${report.data}`);
     }
@@ -635,7 +635,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const totalPeriodDays = Number(currentObra.prazoContratual || 0) + Number(currentObra.aditivoPrazo || 0);
       const calculatedEnd = calculateEndDate(currentObra.dataInicio, currentObra.prazoContratual, currentObra.aditivoPrazo);
       
-      const dateParts = currentObra.dataInicio.split("-");
+      const dateParts = (currentObra?.dataInicio || "").split("-");
       const formattedInicio = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}` : "01/01/2026";
       
       const endParts = calculatedEnd.split("-");

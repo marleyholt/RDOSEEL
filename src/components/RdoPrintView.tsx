@@ -527,7 +527,7 @@ const SingleReportPrint: React.FC<{ report: RdoReport }> = ({ report }) => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {Object.entries(report.paralisacoesDetalhe).map(([key, rowVal]) => {
+                    {Object.entries(report.paralisacoesDetalhe || {}).map(([key, rowVal]) => {
                       const row = rowVal as StoppageDetailRow;
                       return (
                         <tr key={key} className={row.ativo ? "bg-white text-[8px]" : "bg-gray-50/50 text-[8px] opacity-70"}>
