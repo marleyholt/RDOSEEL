@@ -77,6 +77,18 @@ const SingleReportPrint: React.FC<{ report: RdoReport }> = ({ report }) => {
   const { obras, reports } = useRdoStore();
   const currentObra = obras.find(o => o.id === report.obraId || o.nome === report.obra);
 
+  const displayEmitenteNome = report.emitenteAssinado
+    ? (report.emitenteNome || currentObra?.emissorNomeDefault || "")
+    : (currentObra?.emissorNomeDefault || report.emitenteNome || "Representante Emissor");
+
+  const displayGerenciadoraNome = report.gerenciadoraAssinado
+    ? (report.gerenciadoraNome || currentObra?.fiscalGerenciadoraNomeDefault || "")
+    : (currentObra?.fiscalGerenciadoraNomeDefault || report.gerenciadoraNome || "Fiscal da Gerenciadora");
+
+  const displayContratanteNome = report.contratanteAssinado
+    ? (report.contratanteNome || currentObra?.fiscalAprovadorNomeDefault || "")
+    : (currentObra?.fiscalAprovadorNomeDefault || report.contratanteNome || "Fiscal Contratante");
+
   const hoursList = [
     "6h", "7h", "8h", "9h", "10h", "11h", "12h", "13h", "14h", "15h", "16h", "17h", "18h", "19h", "20h", "21h", "22h", "23h",
     "0h", "1h", "2h", "3h", "4h", "5h"
@@ -155,31 +167,82 @@ const SingleReportPrint: React.FC<{ report: RdoReport }> = ({ report }) => {
   // Helper component to render signatures footer
   const PrintFooter: React.FC<{ pageNum: number }> = ({ pageNum }) => (
     <div className="border-t border-gray-300 grid grid-cols-4 gap-2 text-center text-[10px] mt-auto pt-2 print-footer bg-white">
+      {/* EMITENTE */}
       <div className="border-r border-gray-200 pr-2 flex flex-col justify-end align-middle h-24 pb-1">
         <span className="font-bold border-b border-gray-100 pb-1 text-gray-700 uppercase">EMITENTE</span>
-        <div className="flex flex-col items-center">
-          <div className="w-4/5 border-b border-gray-300 mt-8 mb-1"></div>
-          <span className="font-semibold block truncate max-w-full text-gray-800">{report.emitenteNome || "Representante Emissor"}</span>
-          <span className="text-[7px] text-gray-400 block font-mono">SEEL ENGENHARIA</span>
-        </div>
+        {report.emitenteAssinado ? (
+          <div className="flex flex-col items-center justify-end h-16">
+            <span className="text-[7px] text-emerald-600 font-extrabold uppercase bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded leading-none mb-1">
+              ✓ ASSINADO DIGITALMENTE
+            </span>
+            <span className="text-[6px] text-slate-500 font-mono scale-[0.85] truncate max-w-full leading-none mb-1">
+              {report.emitenteConsolidado}
+            </span>
+            <span className="text-[6px] text-slate-400 font-mono scale-[0.85] truncate max-w-full leading-none mb-1">
+              HASH: {report.emitenteHash ? report.emitenteHash.substring(0, 16) : ""}
+            </span>
+            <span className="font-semibold block truncate max-w-full text-gray-800 leading-none mt-1">{displayEmitenteNome}</span>
+            <span className="text-[7px] text-gray-400 block font-mono mt-0.5">SEEL ENGENHARIA</span>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-end h-16">
+            <div className="w-4/5 border-b border-gray-300 mt-auto mb-1"></div>
+            <span className="font-semibold block truncate max-w-full text-gray-800 leading-none">{displayEmitenteNome}</span>
+            <span className="text-[7px] text-gray-400 block font-mono mt-1">SEEL ENGENHARIA</span>
+          </div>
+        )}
       </div>
       
+      {/* GERENCIADORA */}
       <div className="border-r border-gray-200 pr-2 flex flex-col justify-end align-middle h-24 pb-1">
         <span className="font-bold border-b border-gray-100 pb-1 text-gray-700 uppercase">GERENCIADORA</span>
-        <div className="flex flex-col items-center">
-          <div className="w-4/5 border-b border-gray-300 mt-8 mb-1"></div>
-          <span className="font-semibold block truncate max-w-full text-gray-800">-</span>
-          <span className="text-[7px] text-gray-400 block font-mono">{report.gerenciadora || "FISCALIZAÇÃO"}</span>
-        </div>
+        {report.gerenciadoraAssinado ? (
+          <div className="flex flex-col items-center justify-end h-16">
+            <span className="text-[7px] text-emerald-600 font-extrabold uppercase bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded leading-none mb-1">
+              ✓ ASSINADO DIGITALMENTE
+            </span>
+            <span className="text-[6px] text-slate-500 font-mono scale-[0.85] truncate max-w-full leading-none mb-1">
+              {report.gerenciadoraConsolidado}
+            </span>
+            <span className="text-[6px] text-slate-400 font-mono scale-[0.85] truncate max-w-full leading-none mb-1">
+              HASH: {report.gerenciadoraHash ? report.gerenciadoraHash.substring(0, 16) : ""}
+            </span>
+            <span className="font-semibold block truncate max-w-full text-gray-800 leading-none mt-1">{displayGerenciadoraNome}</span>
+            <span className="text-[7px] text-gray-400 block font-mono mt-0.5">{report.gerenciadora || "GERENCIADORA"}</span>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-end h-16">
+            <div className="w-4/5 border-b border-gray-300 mt-auto mb-1"></div>
+            <span className="font-semibold block truncate max-w-full text-gray-800 leading-none">{displayGerenciadoraNome}</span>
+            <span className="text-[7px] text-gray-400 block font-mono mt-1">{report.gerenciadora || "GERENCIADORA"}</span>
+          </div>
+        )}
       </div>
 
+      {/* CONTRATANTE */}
       <div className="border-r border-gray-200 pr-2 flex flex-col justify-end align-middle h-24 pb-1">
         <span className="font-bold border-b border-gray-100 pb-1 text-gray-700 uppercase">CONTRATANTE</span>
-        <div className="flex flex-col items-center">
-          <div className="w-4/5 border-b border-gray-300 mt-8 mb-1"></div>
-          <span className="font-semibold block truncate max-w-full text-gray-800">{report.contratanteNome || "Fiscal Contratante"}</span>
-          <span className="text-[7px] text-gray-400 block font-mono">{report.cliente || "CLIENTE"}</span>
-        </div>
+        {report.contratanteAssinado ? (
+          <div className="flex flex-col items-center justify-end h-16">
+            <span className="text-[7px] text-emerald-600 font-extrabold uppercase bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded leading-none mb-1">
+              ✓ APROVADO DIGITALMENTE
+            </span>
+            <span className="text-[6px] text-slate-500 font-mono scale-[0.85] truncate max-w-full leading-none mb-1">
+              {report.contratanteAprovado}
+            </span>
+            <span className="text-[6px] text-slate-400 font-mono scale-[0.85] truncate max-w-full leading-none mb-1">
+              HASH: {report.contratanteHash ? report.contratanteHash.substring(0, 16) : ""}
+            </span>
+            <span className="font-semibold block truncate max-w-full text-gray-800 leading-none mt-1">{displayContratanteNome}</span>
+            <span className="text-[7px] text-gray-400 block font-mono mt-0.5">{report.cliente || "CLIENTE"}</span>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-end h-16">
+            <div className="w-4/5 border-b border-gray-300 mt-auto mb-1"></div>
+            <span className="font-semibold block truncate max-w-full text-gray-800 leading-none">{displayContratanteNome}</span>
+            <span className="text-[7px] text-gray-400 block font-mono mt-1">{report.cliente || "CLIENTE"}</span>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col justify-between align-middle items-center h-24 text-[9px]">

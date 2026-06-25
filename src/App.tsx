@@ -9,6 +9,7 @@ import { AuthScreen } from "./components/AuthScreen";
 import { RdoEditor } from "./components/RdoEditor";
 import { RdoPrintView } from "./components/RdoPrintView";
 import { ObraManagerModal } from "./components/ObraManagerModal";
+import { ConsolidatedReports } from "./components/ConsolidatedReports";
 import { RdoReport } from "./types";
 import { 
   HardHat, 
@@ -23,7 +24,8 @@ import {
   Sparkles,
   Info,
   Calendar,
-  Printer
+  Printer,
+  BarChart3
 } from "lucide-react";
 
 // Formatting helper
@@ -59,7 +61,8 @@ function AppContent() {
   } = useRdoStore();
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"todos" | "Em Digitação" | "Finalizado">("todos");
+  const [statusFilter, setStatusFilter] = useState<"todos" | "Em Digitação" | "Finalizado" | "Assinado">("todos");
+  const [activeView, setActiveView] = useState<"rdo" | "relatorios">("rdo");
   const [showPrintView, setShowPrintView] = useState(false);
   const [showBatchPrint, setShowBatchPrint] = useState(false);
   const [showBatchPrintConfig, setShowBatchPrintConfig] = useState(false);
@@ -144,13 +147,43 @@ function AppContent() {
       
       {/* 1. TOP HEADER NAVIGATION - High Density Compact Format */}
       <header className="bg-white border-b border-slate-200 h-14 shrink-0 px-5 md:px-6 flex items-center justify-between no-print shadow-xs">
-        <div className="flex items-center gap-2.5">
-          <div className="bg-amber-500 text-slate-900 p-1.5 rounded flex items-center justify-center">
-            <HardHat className="w-4 h-4 text-slate-900" />
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2.5">
+            <div className="bg-amber-500 text-slate-900 p-1.5 rounded flex items-center justify-center">
+              <HardHat className="w-4 h-4 text-slate-900" />
+            </div>
+            <div>
+              <h1 className="font-extrabold text-sm tracking-tight text-slate-950 leading-none">CONSTRUTOR PRO</h1>
+              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">SEEL ENGENHARIA</p>
+            </div>
           </div>
-          <div>
-            <h1 className="font-extrabold text-sm tracking-tight text-slate-950 leading-none">CONSTRUTOR PRO</h1>
-            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">SEEL ENGENHARIA</p>
+
+          <div className="h-6 border-l border-slate-200 hidden md:block"></div>
+
+          {/* View Switcher Tabs */}
+          <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200/60 shadow-inner">
+            <button
+              onClick={() => { setActiveView("rdo"); setShowPrintView(false); }}
+              className={`px-3 h-8 rounded-md text-[10px] font-extrabold uppercase tracking-wider transition-all border-none cursor-pointer flex items-center gap-1.5 ${
+                activeView === "rdo"
+                  ? "bg-amber-500 text-slate-950 shadow-xs"
+                  : "text-slate-500 hover:text-slate-800 hover:bg-slate-200/50"
+              }`}
+            >
+              <HardHat className="w-3.5 h-3.5" />
+              Diários (RDO)
+            </button>
+            <button
+              onClick={() => { setActiveView("relatorios"); setShowPrintView(false); }}
+              className={`px-3 h-8 rounded-md text-[10px] font-extrabold uppercase tracking-wider transition-all border-none cursor-pointer flex items-center gap-1.5 ${
+                activeView === "relatorios"
+                  ? "bg-amber-500 text-slate-950 shadow-xs"
+                  : "text-slate-500 hover:text-slate-800 hover:bg-slate-200/50"
+              }`}
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              Consolidados
+            </button>
           </div>
         </div>
 
@@ -242,10 +275,10 @@ function AppContent() {
             </div>
 
             {/* Filtro de Status RDO */}
-            <div className="grid grid-cols-3 gap-1 bg-slate-950/50 p-1 rounded border border-slate-800">
+            <div className="grid grid-cols-4 gap-1 bg-slate-950/50 p-1 rounded border border-slate-800">
               <button
                 onClick={() => setStatusFilter("todos")}
-                className={`py-1 rounded text-[9px] uppercase font-bold transition-all border-none cursor-pointer leading-tight ${
+                className={`py-1 rounded text-[8.5px] uppercase font-bold transition-all border-none cursor-pointer leading-tight ${
                   statusFilter === "todos"
                     ? "bg-amber-500 text-slate-950 font-black shadow-sm"
                     : "text-slate-400 hover:text-white"
@@ -255,7 +288,7 @@ function AppContent() {
               </button>
               <button
                 onClick={() => setStatusFilter("Em Digitação")}
-                className={`py-1 rounded text-[9px] uppercase font-bold transition-all border-none cursor-pointer leading-tight ${
+                className={`py-1 rounded text-[8.5px] uppercase font-bold transition-all border-none cursor-pointer leading-tight ${
                   statusFilter === "Em Digitação"
                     ? "bg-amber-400 text-slate-950 font-black shadow-sm"
                     : "text-slate-400 hover:text-white"
@@ -265,13 +298,23 @@ function AppContent() {
               </button>
               <button
                 onClick={() => setStatusFilter("Finalizado")}
-                className={`py-1 rounded text-[9px] uppercase font-bold transition-all border-none cursor-pointer leading-tight ${
+                className={`py-1 rounded text-[8.5px] uppercase font-bold transition-all border-none cursor-pointer leading-tight ${
                   statusFilter === "Finalizado"
                     ? "bg-emerald-500 text-slate-950 font-black shadow-sm"
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                Finalizados
+                Fechados
+              </button>
+              <button
+                onClick={() => setStatusFilter("Assinado")}
+                className={`py-1 rounded text-[8.5px] uppercase font-bold transition-all border-none cursor-pointer leading-tight ${
+                  statusFilter === "Assinado"
+                    ? "bg-sky-500 text-slate-950 font-black shadow-sm"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Assinados
               </button>
             </div>
           </div>
@@ -321,9 +364,11 @@ function AppContent() {
                             {report.rdoNo}
                           </span>
                           <span className={`text-[8px] font-bold uppercase tracking-wider ${
-                            (report.status || "Em Digitação") === "Finalizado" 
-                              ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20" 
-                              : "text-amber-400 bg-amber-500/10 border border-amber-500/20"
+                            (report.status || "Em Digitação") === "Assinado"
+                              ? "text-sky-400 bg-sky-500/10 border border-sky-500/20"
+                              : (report.status || "Em Digitação") === "Finalizado" 
+                                ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20" 
+                                : "text-amber-400 bg-amber-500/10 border border-amber-500/20"
                           } px-1 rounded w-fit`}>
                             {report.status || "Em Digitação"}
                           </span>
@@ -376,7 +421,9 @@ function AppContent() {
 
         {/* ACTIVE WORKSPACE AREA: Form editor on select */}
         <main className="flex-1 bg-slate-50/50 overflow-y-auto p-5 no-print">
-          {currentReport ? (
+          {activeView === "relatorios" ? (
+            <ConsolidatedReports />
+          ) : currentReport ? (
             <RdoEditor onShowPrint={() => setShowPrintView(true)} />
           ) : (
             <div className="h-full flex flex-col justify-center items-center text-center p-6 space-y-4 max-w-md mx-auto">

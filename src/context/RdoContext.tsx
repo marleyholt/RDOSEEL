@@ -617,6 +617,10 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           rdoNo: nextRdoNo,
           data: todayStr,
           status: "Em Digitação",
+          creatorEmail: user?.email || "",
+          fiscalizacaoFinalizada: false,
+          emitenteAssinado: false,
+          contratanteAssinado: false,
           prazoIncorrido: incorrido,
           prazoFaltante: faltante,
           // Reset signature parameters as they need separate flow
@@ -648,21 +652,21 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           id: "seel-labor",
           nome: "S SEEL - Engenharia",
           items: [
-            { id: "seel-l1", cargo: "Armador", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" },
-            { id: "seel-l2", cargo: "Carpinteiro", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" },
-            { id: "seel-l3", cargo: "Mestre de obras", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" },
-            { id: "seel-l4", cargo: "Encarregado", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" },
-            { id: "seel-l5", cargo: "Servente", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" },
-            { id: "seel-l6", cargo: "Engenheiro de Obra", c: 0, f: 0, a: 0, t: 0, moiMod: "MOI" }
+            { id: "seel-l1", cargo: "Armador", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" as const },
+            { id: "seel-l2", cargo: "Carpinteiro", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" as const },
+            { id: "seel-l3", cargo: "Mestre de obras", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" as const },
+            { id: "seel-l4", cargo: "Encarregado", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" as const },
+            { id: "seel-l5", cargo: "Servente", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" as const },
+            { id: "seel-l6", cargo: "Engenheiro de Obra", c: 0, f: 0, a: 0, t: 0, moiMod: "MOI" as const }
           ]
         },
         ...(currentObra.subcontratadas || []).map((sub, idx) => ({
           id: `sub-labor-${idx}`,
           nome: sub,
           items: [
-            { id: `sub-l1-${idx}`, cargo: "Encarregado", c: 0, f: 0, a: 0, t: 0, moiMod: "MOI" },
-            { id: `sub-l2-${idx}`, cargo: "Oficial", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" },
-            { id: `sub-l3-${idx}`, cargo: "Ajudante", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" }
+            { id: `sub-l1-${idx}`, cargo: "Encarregado", c: 0, f: 0, a: 0, t: 0, moiMod: "MOI" as const },
+            { id: `sub-l2-${idx}`, cargo: "Oficial", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" as const },
+            { id: `sub-l3-${idx}`, cargo: "Ajudante", c: 0, f: 0, a: 0, t: 0, moiMod: "MOD" as const }
           ]
         }))
       ];
@@ -684,6 +688,10 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         obra: currentObra.nome,
         obraId: currentObra.id,
         status: "Em Digitação",
+        creatorEmail: user?.email || "",
+        fiscalizacaoFinalizada: false,
+        emitenteAssinado: false,
+        contratanteAssinado: false,
         cliente: currentObra.cliente,
         contratada: currentObra.contratada || "SEEL SERVIÇOS DE ENGENHARIA LTDA",
         gestor: "",

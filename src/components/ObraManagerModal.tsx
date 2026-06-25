@@ -42,12 +42,17 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
   const [subcontratadas, setSubcontratadas] = useState<string[]>([]);
   const [permissoes, setPermissoes] = useState<ObraPermission[]>([]);
 
+  // Default signers per Obra
+  const [emissorNomeDefault, setEmissorNomeDefault] = useState("");
+  const [fiscalGerenciadoraNomeDefault, setFiscalGerenciadoraNomeDefault] = useState("");
+  const [fiscalAprovadorNomeDefault, setFiscalAprovadorNomeDefault] = useState("");
+
   // Subcontractor temp field
   const [newSub, setNewSub] = useState("");
   
   // Permission temp fields
   const [newPermEmail, setNewPermEmail] = useState("");
-  const [newPermAccess, setNewPermAccess] = useState<"view" | "edit" | "fiscalizacao">("view");
+  const [newPermAccess, setNewPermAccess] = useState<"view" | "edit" | "fiscalizacao" | "gerenciadora">("view");
 
   // Activity temp fields
   const [newActRef, setNewActRef] = useState("");
@@ -75,6 +80,9 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
       setAtividades([]);
       setSubcontratadas([]);
       setPermissoes([]);
+      setEmissorNomeDefault("");
+      setFiscalGerenciadoraNomeDefault("");
+      setFiscalAprovadorNomeDefault("");
     } else {
       const idx = obras.find(o => o.id === selectedObraId);
       if (idx) {
@@ -91,6 +99,9 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
         setAtividades(idx.atividades || []);
         setSubcontratadas(idx.subcontratadas || []);
         setPermissoes(idx.permissoes || []);
+        setEmissorNomeDefault(idx.emissorNomeDefault || "");
+        setFiscalGerenciadoraNomeDefault(idx.fiscalGerenciadoraNomeDefault || "");
+        setFiscalAprovadorNomeDefault(idx.fiscalAprovadorNomeDefault || "");
       } else if (obras.length > 0) {
         setSelectedObraId(obras[0].id || "");
       }
@@ -344,7 +355,12 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
       logoSeel,
       subcontratadas,
       permissoes,
-      atividades
+      atividades,
+      
+      // Signers Default Names
+      emissorNomeDefault: emissorNomeDefault.trim(),
+      fiscalGerenciadoraNomeDefault: fiscalGerenciadoraNomeDefault.trim(),
+      fiscalAprovadorNomeDefault: fiscalAprovadorNomeDefault.trim()
     };
 
     try {
@@ -559,11 +575,57 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
               </div>
             </section>
 
-            {/* SECT 3: LOGO UPLOADS */}
+            {/* SECT 3: SIGNATÁRIOS E RESPONSÁVEIS DE ASSINATURA */}
+            <section className="bg-slate-50/50 p-4 rounded-xl border border-slate-200 space-y-4">
+              <h4 className="font-bold text-xs text-slate-800 uppercase tracking-wide flex items-center gap-1.5 border-b border-slate-200 pb-1.5">
+                <Users className="w-4 h-4 text-sky-600" />
+                3. Responsáveis pelas Assinaturas Digitais do RDO
+              </h4>
+              <p className="text-[10px] text-slate-500 leading-normal uppercase font-bold">
+                Configure os nomes oficiais que aparecerão nos RDOs desta obra para as três vias de assinaturas digitais.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase block">Nome do Engenheiro Emissor (Contratada)</label>
+                  <input
+                    type="text"
+                    value={emissorNomeDefault}
+                    onChange={(e) => setEmissorNomeDefault(e.target.value)}
+                    placeholder="Ex: Engenheiro Fulano de Tal"
+                    className="w-full bg-white border border-slate-300 rounded p-2 text-xs focus:ring-1 focus:ring-amber-500 outline-none font-medium"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase block">Nome do Fiscal da Gerenciadora</label>
+                  <input
+                    type="text"
+                    value={fiscalGerenciadoraNomeDefault}
+                    onChange={(e) => setFiscalGerenciadoraNomeDefault(e.target.value)}
+                    placeholder="Ex: Fiscal Cicrano de Tal"
+                    className="w-full bg-white border border-slate-300 rounded p-2 text-xs focus:ring-1 focus:ring-amber-500 outline-none font-medium"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase block">Nome do Fiscal Aprovador (Contratante)</label>
+                  <input
+                    type="text"
+                    value={fiscalAprovadorNomeDefault}
+                    onChange={(e) => setFiscalAprovadorNomeDefault(e.target.value)}
+                    placeholder="Ex: Engenheiro Fiscal Sabesp"
+                    className="w-full bg-white border border-slate-300 rounded p-2 text-xs focus:ring-1 focus:ring-amber-500 outline-none font-medium"
+                  />
+                </div>
+              </div>
+            </section>
+
+            {/* SECT 4: LOGO UPLOADS */}
             <section className="bg-slate-50/50 p-4 rounded-xl border border-slate-200 space-y-4">
               <h4 className="font-bold text-xs text-slate-800 uppercase tracking-wide flex items-center gap-1.5 border-b border-slate-200 pb-1.5">
                 <ImageIcon className="w-4 h-4 text-slate-500" />
-                3. Logotipe de Clientes e Engenharia
+                4. Logotipo de Clientes e Engenharia
               </h4>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

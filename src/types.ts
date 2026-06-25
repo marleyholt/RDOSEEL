@@ -106,7 +106,8 @@ export interface RdoReport {
   obra: string;
   obraId?: string; // Links to the ObraConfig
   anexos?: { id: string, dataUrl: string, name?: string, type?: string }[]; // base64 images or PDFs
-  status?: "Em Digitação" | "Finalizado";
+  status?: "Em Digitação" | "Enviado para Fiscalização" | "Finalizado" | "Assinado" | "Cancelado";
+  creatorEmail?: string;
   cliente: string;
   contratada?: string; // Main contractor (e.g., SEEL)
   gestor: string;
@@ -142,9 +143,17 @@ export interface RdoReport {
   emitenteNome: string;
   emitenteConsolidado: string;
   emitenteHash: string;
+  emitenteAssinado?: boolean;
+  
+  gerenciadoraNome?: string;
+  gerenciadoraConsolidado?: string;
+  gerenciadoraHash?: string;
+  gerenciadoraAssinado?: boolean;
+  
   contratanteNome: string;
   contratanteAprovado: string;
   contratanteHash: string;
+  contratanteAssinado?: boolean;
   
   createdAt?: string;
   updatedAt?: string;
@@ -161,7 +170,7 @@ export interface ObraActivity {
 
 export interface ObraPermission {
   email: string;
-  access: "view" | "edit" | "fiscalizacao";
+  access: "view" | "edit" | "fiscalizacao" | "gerenciadora";
 }
 
 export interface ObraConfig {
@@ -180,6 +189,12 @@ export interface ObraConfig {
   atividades: ObraActivity[]; // PQ catalogue
   subcontratadas: string[]; // list of companies
   permissoes: ObraPermission[];
+  
+  // Default Signers Configured per Obra
+  emissorNomeDefault?: string;
+  fiscalGerenciadoraNomeDefault?: string;
+  fiscalAprovadorNomeDefault?: string;
+  
   createdAt?: string;
   updatedAt?: string;
 }

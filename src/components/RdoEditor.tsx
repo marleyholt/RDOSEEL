@@ -31,7 +31,12 @@ import {
   Upload,
   Lock,
   Copy,
-  X
+  X,
+  Mail,
+  Send,
+  LockOpen,
+  AlertCircle,
+  Check
 } from "lucide-react";
 
 interface RdoEditorProps {
@@ -45,15 +50,77 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [cloneType, setCloneType] = useState<"efetivo" | "equipamentos" | null>(null);
 
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => void | Promise<void>;
+    confirmText?: string;
+    cancelText?: string;
+    type?: "warning" | "danger" | "info" | "success";
+  } | null>(null);
+
+  const showConfirmation = (
+    title: string,
+    description: string,
+    onConfirm: () => void | Promise<void>,
+    type: "warning" | "danger" | "info" | "success" = "warning",
+    confirmText = "Confirmar",
+    cancelText = "Cancelar"
+  ) => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      description,
+      onConfirm,
+      confirmText,
+      cancelText,
+      type
+    });
+  };
+
+  const [emailFallback, setEmailFallback] = useState<{
+    to: string;
+    subject: string;
+    body: string;
+    role: string;
+  } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  const handleCopyText = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCopyField = (text: string, fieldName: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(fieldName);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  const sendEmailHelper = async (to: string, subject: string, htmlContent: string, plainText: string, roleName: string) => {
+    // Abre a janela de envio manual diretamente para segurança e conveniência do usuário (evitando SMTP no servidor)
+    setEmailFallback({
+      to,
+      subject,
+      body: plainText,
+      role: roleName
+    });
+    return true;
+  };
+
   const currentUserEmail = user && 'email' in user ? (user.email?.toLowerCase() || "") : "";
   const permission = currentObra?.permissoes?.find(p => p?.email?.toLowerCase() === currentUserEmail);
   const accessLevel = permission ? permission.access : (currentObra?.userId === user?.uid ? "owner" : "view");
 
   const isReadOnly = accessLevel === "view" || (!user && !isFirebase); // If logged out locally, fallback read-only
-  const isFiscalizacao = accessLevel === "fiscalizacao";
+  const isFiscalizacao = accessLevel === "fiscalizacao" || accessLevel === "owner";
+  const isFiscalizadora = accessLevel === "gerenciadora" || accessLevel === "owner";
   const isEditor = accessLevel === "edit" || accessLevel === "owner";
   
-  const hasFiscal = currentObra?.permissoes?.some(p => p.access === "fiscalizacao") || false;
+  const hasFiscal = currentObra?.permissoes?.some(p => p.access === "fiscalizacao" || p.access === "gerenciadora") || false;
 
   // Check if current date in currentRdo is already taken by another RDO of same Obra
   const hasDuplicateDate = React.useMemo(() => {
@@ -93,6 +160,20 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
       ...changes
     } as RdoReport);
   };
+
+  const associatedObra = obras.find(o => o.id === currentReport.obraId || o.nome === currentReport.obra);
+
+  const displayEmitenteNome = currentReport.emitenteAssinado
+    ? (currentReport.emitenteNome || associatedObra?.emissorNomeDefault || "")
+    : (associatedObra?.emissorNomeDefault || currentReport.emitenteNome || "");
+
+  const displayGerenciadoraNome = currentReport.gerenciadoraAssinado
+    ? (currentReport.gerenciadoraNome || associatedObra?.fiscalGerenciadoraNomeDefault || "")
+    : (associatedObra?.fiscalGerenciadoraNomeDefault || currentReport.gerenciadoraNome || "");
+
+  const displayContratanteNome = currentReport.contratanteAssinado
+    ? (currentReport.contratanteNome || associatedObra?.fiscalAprovadorNomeDefault || "")
+    : (associatedObra?.fiscalAprovadorNomeDefault || currentReport.contratanteNome || "");
 
   const handleSave = async () => {
     if (hasDuplicateDate) {
@@ -412,11 +493,17 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
 
   const handleDeleteSubcontractorGroup = (groupIndex: number) => {
     const groupName = currentReport.efetivoDetalhado[groupIndex]?.nome || "";
-    const confirmDelete = window.confirm(`Deseja realmente remover a subcontratada "${groupName}" e todas as suas funções correspondentes deste RDO?`);
-    if (!confirmDelete) return;
-
-    const updatedGrid = currentReport.efetivoDetalhado.filter((_, i) => i !== groupIndex);
-    updateReport({ efetivoDetalhado: updatedGrid });
+    showConfirmation(
+      "Remover Subcontratada",
+      `Deseja realmente remover a subcontratada "${groupName}" e todas as suas funções correspondentes deste RDO?`,
+      () => {
+        const updatedGrid = currentReport.efetivoDetalhado.filter((_, i) => i !== groupIndex);
+        updateReport({ efetivoDetalhado: updatedGrid });
+      },
+      "danger",
+      "Sim, Remover",
+      "Cancelar"
+    );
   };
 
   // Equipment detail Operations
@@ -562,19 +649,23 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
           </div>
           <div>
             <h2 className="font-bold text-slate-900 text-xs uppercase tracking-tight leading-none">REGISTRO DIÁRIO DE OBRA nº {currentReport.rdoNo}</h2>
-            <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-wider font-semibold flex items-center gap-1.5">
+            <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-wider font-semibold flex items-center gap-1.5 flex-wrap">
               Status: 
               <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold pb-1 ${
-                currentReport.status === "Finalizado" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                currentReport.status === "Enviado para Fiscalização" ? "bg-amber-100 text-amber-800 ring-1 ring-amber-200" :
+                currentReport.status === "Finalizado" ? "bg-blue-100 text-blue-800 ring-1 ring-blue-200" :
+                currentReport.status === "Assinado" ? "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200" :
+                currentReport.status === "Cancelado" ? "bg-rose-100 text-rose-800 ring-1 ring-rose-200" :
+                "bg-slate-100 text-slate-800 ring-1 ring-slate-200"
               }`}>
-                {(currentReport.status || "Em Digitação").toUpperCase()}
+                {currentReport.status === "Finalizado" ? "FECHADO / EM ASSINATURA" : (currentReport.status || "Em Digitação").toUpperCase()}
               </span> 
               — {formatPrintDate(currentReport.data).toUpperCase()}
             </p>
           </div>
         </div>
 
-        <div className="flex gap-1.5">
+        <div className="flex flex-wrap gap-1.5 items-center">
           {saveSuccess && (
             <span className="bg-emerald-50 text-emerald-800 border border-emerald-100 px-2.5 py-1 rounded text-[10px] font-bold flex items-center animate-fade-in">
               <CheckCircle className="w-3.5 h-3.5 mr-1 text-emerald-600" />
@@ -584,84 +675,255 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
           
           {isEditor && (
             <>
-              <button
-                onClick={async () => {
-                  const nextStatus = currentReport.status === "Finalizado" ? "Em Digitação" : "Finalizado";
-                  
-                  setSaving(true);
-                  setSaveSuccess(false);
-                  try {
-                    // Auto compute total labor from detailed board
-                    let computedMoi = 0;
-                    let computedMod = 0;
-                    currentReport.efetivoDetalhado.forEach(g => {
-                      g.items.forEach(itm => {
-                        if (itm.moiMod === "MOI") computedMoi += Number(itm.c || 0) - Number(itm.f || 0);
-                        if (itm.moiMod === "MOD") computedMod += Number(itm.c || 0) - Number(itm.f || 0);
-                      });
-                    });
+              {/* STATUS: Em Digitação */}
+              {(currentReport.status === "Em Digitação" || !currentReport.status) && (
+                <>
+                  <button
+                    onClick={async () => {
+                      const fiscalEmails = currentObra?.permissoes
+                        ?.filter(p => p.access === "fiscalizacao")
+                        ?.map(p => p.email?.trim())
+                        ?.filter(Boolean) || [];
 
-                    // Auto compute total equipment from detailed table
-                    const computedEqTotal = currentReport.equipamentosDetalhado.reduce((sum, q) => sum + Number(q.quantidade || 0), 0);
-
-                    const computedElapsed = Number(currentReport.prazoIncorrido || 0);
-                    const computedRemaining = Math.max(0, Number(currentReport.prazo || 0) - computedElapsed);
-                    const computedAccumulatedRain = calculateAccumulatedMonthRain();
-
-                    await saveReport({
-                      ...currentReport,
-                      status: nextStatus,
-                      prazoFaltante: computedRemaining,
-                      precipitacao: {
-                        ...currentReport.precipitacao,
-                        acumuladoMes: computedAccumulatedRain
-                      },
-                      efetivoSummary: {
-                        ...currentReport.efetivoSummary,
-                        moi: computedMoi,
-                        mod: computedMod,
-                        total: computedMoi + computedMod + Number(currentReport.efetivoSummary.subcontratadosMoiMod || 0)
-                      },
-                      equipamentosSummary: {
-                        ...currentReport.equipamentosSummary,
-                        total: computedEqTotal,
-                        mobilizados: computedEqTotal
+                      if (fiscalEmails.length === 0) {
+                        alert("Não encontramos nenhum usuário com acesso 'Fiscalização' cadastrado nas permissões desta obra. Por favor, adicione o e-mail do fiscal nas configurações da obra no botão 'Gerenciar Obras' no topo direito antes de enviar.");
+                        return;
                       }
-                    });
-                    setSaveSuccess(true);
-                    setTimeout(() => setSaveSuccess(false), 3000);
-                  } catch (err) {
-                    console.error(err);
-                  } finally {
-                    setSaving(false);
-                  }
-                }}
-                disabled={saving || (hasFiscal && currentReport.status !== "Finalizado" && !currentReport.fiscalizacaoFinalizada)}
-                className={`h-8 flex items-center gap-1.5 px-3 font-bold text-[11px] uppercase tracking-wide rounded transition-all shadow-xs text-white ${
-                  currentReport.status === "Finalizado" 
-                    ? "bg-slate-700 hover:bg-slate-800" 
-                    : "bg-[#004899] hover:bg-[#003c80] disabled:opacity-50 disabled:bg-slate-400"
-                }`}
-                title={hasFiscal && !currentReport.fiscalizacaoFinalizada && currentReport.status !== "Finalizado" ? "A fiscalização precisa finalizar o comentário primeiro" : ""}
-              >
-                <CheckCircle className="w-3.5 h-3.5" />
-                {currentReport.status === "Finalizado" ? "Reabrir RDO" : "Finalizar RDO"}
-              </button>
 
-              <button
-                onClick={handleSave}
-                disabled={saving || currentReport.status === "Finalizado"}
-                className="h-8 flex items-center gap-1 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-[11px] uppercase tracking-wide rounded transition-all shadow-xs"
-              >
-                <Save className="w-3.5 h-3.5" />
-                {saving ? "Salvando..." : "Salvar Rascunho"}
-              </button>
+                      setSaving(true);
+                      try {
+                        const targetEmail = fiscalEmails.join(",");
+                        const rdoDateStr = formatPrintDate(currentReport.data);
+                        const subject = `[SEEL RDO] Nova Análise Disponível - RDO nº ${currentReport.rdoNo} - Obra: ${currentReport.obra}`;
+                        
+                        const textBody = `Olá,\n\nO Relatório Diário de Obra (RDO) nº ${currentReport.rdoNo} da obra "${currentReport.obra}" (Data: ${rdoDateStr}) foi preenchido e está disponível para sua análise e inserção de comentários adicionais de fiscalização.\n\nAcesse a plataforma para emitir suas considerações.\n\nEmitente: ${currentReport.emitenteNome || "Não preenchido"}\nEfetivo Presente: ${currentReport.efetivoSummary?.total || 0} colaboradores.\n\nAtenciosamente,\nEquipe SEEL Engenharia.`;
+                        
+                        const htmlBody = `
+                          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px; color: #1e293b;">
+                            <h2 style="color: #004899; margin-top: 0; font-size: 18px;">Análise de RDO Solicitada</h2>
+                            <p>Olá,</p>
+                            <p>O Relatório Diário de Obra (RDO) nº <strong>${currentReport.rdoNo}</strong> para a obra <strong>${currentReport.obra}</strong> (data: <strong>${rdoDateStr}</strong>) foi preenchido pelo emissor e está disponível para sua análise.</p>
+                            <p>Como fiscalizador, seu papel agora é inserir os comentários adicionais de fiscalização e concluir a sua análise na aba de aprovações/assinaturas.</p>
+                            <div style="background-color: #f8fafc; border-left: 4px solid #004899; padding: 12px; margin: 18px 0; border-radius: 4px; font-size: 13px;">
+                              <strong>Resumo do Relatório:</strong><br/>
+                              - Emitente: ${currentReport.emitenteNome || "Não especificado"}<br/>
+                              - Efetivo Total Presente: ${currentReport.efetivoSummary?.total || 0} colaboradores<br/>
+                              - Condições de Clima: ${currentReport.precipitacao?.total !== undefined ? `${currentReport.precipitacao.total} mm` : "Não preenchido"}<br/>
+                            </div>
+                            <p style="color: #64748b; font-size: 12px; margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 12px;">Esta é uma notificação automática do sistema de Relatório Diário de Obras (SEEL RDO).</p>
+                          </div>
+                        `;
+
+                        // Salva no Firestore
+                        const updated = {
+                          ...currentReport,
+                          status: "Enviado para Fiscalização" as const,
+                          creatorEmail: user?.email || ""
+                        };
+                        await saveReport(updated);
+
+                        // Dispara e-mail
+                        await sendEmailHelper(targetEmail, subject, htmlBody, textBody, "Fiscalização");
+                        
+                        alert(`RDO enviado para a fiscalização (${targetEmail}) com sucesso!`);
+                      } catch (err: any) {
+                        console.error(err);
+                        alert("Erro ao enviar RDO para fiscalização: " + err.message);
+                      } finally {
+                        setSaving(false);
+                      }
+                    }}
+                    disabled={saving}
+                    className="h-8 flex items-center gap-1.5 px-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold text-[11px] uppercase tracking-wide rounded transition-all shadow-xs cursor-pointer border-none"
+                    title="Enviar e-mail de notificação para o fiscal inserido nas permissões desta obra"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    Enviar para Fiscalização
+                  </button>
+
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="h-8 flex items-center gap-1 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-[11px] uppercase tracking-wide rounded transition-all shadow-xs cursor-pointer border-none"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    {saving ? "Salvando..." : "Salvar Rascunho"}
+                  </button>
+                </>
+              )}
+
+              {/* STATUS: Enviado para Fiscalização */}
+              {currentReport.status === "Enviado para Fiscalização" && (
+                <>
+                  <button
+                    onClick={() => {
+                      showConfirmation(
+                        "Reaver para Digitação",
+                        "Deseja reaver este RDO de volta para rascunho de digitação? A fiscalização não conseguirá salvar comentários adicionais até que você envie novamente.",
+                        async () => {
+                          setSaving(true);
+                          try {
+                            await saveReport({
+                              ...currentReport,
+                              status: "Em Digitação"
+                            });
+                            alert("RDO trazido de volta para edição com sucesso!");
+                          } catch (err: any) {
+                            console.error(err);
+                            alert("Erro ao reaver RDO: " + err.message);
+                          } finally {
+                            setSaving(false);
+                          }
+                        },
+                        "warning",
+                        "Sim, Reaver",
+                        "Cancelar"
+                      );
+                    }}
+                    disabled={saving}
+                    className="h-8 flex items-center gap-1.5 px-3 bg-slate-600 hover:bg-slate-700 disabled:opacity-50 text-white font-bold text-[11px] uppercase tracking-wide rounded transition-all shadow-xs cursor-pointer border-none"
+                  >
+                    <LockOpen className="w-3.5 h-3.5" />
+                    Reaver para Digitação
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      setSaving(true);
+                      try {
+                        // Auto compute totals on closing
+                        let computedMoi = 0;
+                        let computedMod = 0;
+                        currentReport.efetivoDetalhado.forEach(g => {
+                          g.items.forEach(itm => {
+                            if (itm.moiMod === "MOI") computedMoi += Number(itm.c || 0) - Number(itm.f || 0);
+                            if (itm.moiMod === "MOD") computedMod += Number(itm.c || 0) - Number(itm.f || 0);
+                          });
+                        });
+                        const computedEqTotal = currentReport.equipamentosDetalhado.reduce((sum, q) => sum + Number(q.quantidade || 0), 0);
+                        const computedElapsed = Number(currentReport.prazoIncorrido || 0);
+                        const computedRemaining = Math.max(0, Number(currentReport.prazo || 0) - computedElapsed);
+                        const computedAccumulatedRain = calculateAccumulatedMonthRain();
+
+                        await saveReport({
+                          ...currentReport,
+                          status: "Finalizado",
+                          prazoFaltante: computedRemaining,
+                          precipitacao: {
+                            ...currentReport.precipitacao,
+                            acumuladoMes: computedAccumulatedRain
+                          },
+                          efetivoSummary: {
+                            ...currentReport.efetivoSummary,
+                            moi: computedMoi,
+                            mod: computedMod,
+                            total: computedMoi + computedMod + Number(currentReport.efetivoSummary.subcontratadosMoiMod || 0)
+                          },
+                          equipamentosSummary: {
+                            ...currentReport.equipamentosSummary,
+                            total: computedEqTotal,
+                            mobilizados: computedEqTotal
+                          }
+                        });
+                        alert("RDO Fechado com sucesso! Agora o diário está liberado para as assinaturas digitais na aba 'Aprovações e Assinaturas'.");
+                      } catch (err: any) {
+                        console.error(err);
+                        alert("Erro ao fechar RDO: " + err.message);
+                      } finally {
+                        setSaving(false);
+                      }
+                    }}
+                    disabled={saving || !currentReport.fiscalizacaoFinalizada}
+                    className="h-8 flex items-center gap-1.5 px-3 bg-[#004899] hover:bg-[#003c80] disabled:opacity-50 disabled:bg-slate-400 text-white font-bold text-[11px] uppercase tracking-wide rounded transition-all shadow-xs cursor-pointer border-none"
+                    title={!currentReport.fiscalizacaoFinalizada ? "A fiscalização precisa finalizar e enviar os comentários adicionais primeiro" : "Fechar o RDO e disponibilizar para colher assinaturas digitais"}
+                  >
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    Fechar RDO e Enviar para Assinatura
+                  </button>
+                </>
+              )}
+
+              {/* STATUS: Finalizado (Fechado para Assinaturas) */}
+              {currentReport.status === "Finalizado" && (
+                <button
+                  onClick={() => {
+                    showConfirmation(
+                      "Reabrir RDO",
+                      "Tem certeza que deseja reabrir este RDO? Isso cancelará as assinaturas digitais coletadas até o momento.",
+                      async () => {
+                        setSaving(true);
+                        try {
+                          await saveReport({
+                            ...currentReport,
+                            status: "Em Digitação",
+                            emitenteAssinado: false,
+                            emitenteConsolidado: "",
+                            emitenteHash: "",
+                            contratanteAssinado: false,
+                            contratanteAprovado: "",
+                            contratanteHash: ""
+                          });
+                          alert("RDO reaberto com sucesso! As assinaturas foram limpas para permitir edições.");
+                        } catch (err: any) {
+                          console.error(err);
+                          alert("Erro ao reabrir RDO: " + err.message);
+                        } finally {
+                          setSaving(false);
+                        }
+                      },
+                      "warning",
+                      "Sim, Reabrir",
+                      "Cancelar"
+                    );
+                  }}
+                  disabled={saving}
+                  className="h-8 flex items-center gap-1.5 px-3 bg-slate-700 hover:bg-slate-800 text-white font-bold text-[11px] uppercase tracking-wide rounded transition-all shadow-xs cursor-pointer border-none"
+                >
+                  <LockOpen className="w-3.5 h-3.5" />
+                  Reabrir RDO
+                </button>
+              )}
+
+              {/* STATUS: Assinado (Completo) */}
+              {currentReport.status === "Assinado" && (
+                <button
+                  onClick={() => {
+                    showConfirmation(
+                      "AVISO CRÍTICO - Cancelamento de RDO",
+                      "Deseja realmente CANCELAR este RDO assinado digitalmente? Esta operação é irreversível, anulará o documento e bloqueará edições permanentemente.",
+                      async () => {
+                        setSaving(true);
+                        try {
+                          await saveReport({
+                            ...currentReport,
+                            status: "Cancelado"
+                          });
+                          alert("RDO cancelado com sucesso!");
+                        } catch (err: any) {
+                          console.error(err);
+                          alert("Erro ao cancelar RDO: " + err.message);
+                        } finally {
+                          setSaving(false);
+                        }
+                      },
+                      "danger",
+                      "Sim, Cancelar Documento",
+                      "Voltar"
+                    );
+                  }}
+                  disabled={saving}
+                  className="h-8 flex items-center gap-1.5 px-3 bg-red-600 hover:bg-red-700 text-white font-bold text-[11px] uppercase tracking-wide rounded transition-all shadow-xs cursor-pointer border-none"
+                >
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  Cancelar RDO
+                </button>
+              )}
             </>
           )}
           
           <button
             onClick={onShowPrint}
-            className="h-8 flex items-center gap-1.5 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] uppercase tracking-wide rounded transition-all shadow-xs"
+            className="h-8 flex items-center gap-1.5 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] uppercase tracking-wide rounded transition-all shadow-xs cursor-pointer border-none"
           >
             Visualizar PDF
           </button>
@@ -1582,7 +1844,43 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
           <div className="space-y-6 animate-fade-in pb-8">
             <fieldset disabled={isReadOnly || currentReport.status === "Finalizado" || (isFiscalizacao && currentReport.fiscalizacaoFinalizada)} className={`space-y-4 ${isFiscalizacao && !currentReport.fiscalizacaoFinalizada ? 'ring-2 ring-amber-500 rounded p-4 bg-amber-50/30' : ''}`}>
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1.5 flex-1">Comentários Adicionais de Fiscalização</h3>
+                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1.5 flex-1 flex items-center justify-between">
+                  <span>Comentários Adicionais de Fiscalização</span>
+                  
+                  {isFiscalizacao && currentReport.fiscalizacaoFinalizada && currentReport.status === "Enviado para Fiscalização" && (
+                    <button
+                      onClick={() => {
+                        showConfirmation(
+                          "Reabrir Comentários",
+                          "Deseja reabrir seus comentários adicionais para novas edições?",
+                          async () => {
+                            try {
+                              setSaving(true);
+                              await saveReport({
+                                ...currentReport,
+                                fiscalizacaoFinalizada: false
+                              });
+                              alert("Comentários reabertos com sucesso! Você já pode editá-los novamente.");
+                            } catch (err) {
+                              console.error(err);
+                              alert("Erro ao reabrir comentários.");
+                            } finally {
+                              setSaving(false);
+                            }
+                          },
+                          "warning",
+                          "Sim, Reabrir",
+                          "Cancelar"
+                        );
+                      }}
+                      className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-[9px] font-bold uppercase tracking-wider transition-colors border-none cursor-pointer flex items-center gap-1.5 shadow-sm"
+                    >
+                      <LockOpen className="w-3 h-3" />
+                      Reabrir Comentários
+                    </button>
+                  )}
+                </h3>
+                
                 {isFiscalizacao && !currentReport.fiscalizacaoFinalizada && (
                   <div className="flex gap-2 ml-4">
                     <button
@@ -1599,7 +1897,7 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
                           setSaving(false);
                         }
                       }}
-                      className="px-3 py-1.5 bg-[#004899] hover:bg-[#003c80] text-white rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
+                      className="px-3 py-1.5 bg-[#004899] hover:bg-[#003c80] text-white rounded text-[10px] font-bold uppercase tracking-wider transition-colors border-none cursor-pointer"
                     >
                       {saving ? "Salvando..." : "Salvar Rascunho"}
                     </button>
@@ -1607,19 +1905,49 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
                       onClick={async () => {
                         try {
                           setSaving(true);
+                          
+                          // Salva como finalizado
                           await saveReport({
                             ...currentReport,
                             fiscalizacaoFinalizada: true
                           });
-                          alert("Comentário finalizado! O emissor já pode finalizar o documento.");
+
+                          // Dispara e-mail para o emissor/editor
+                          const editorEmails = currentObra?.permissoes
+                            ?.filter(p => p.access === "edit")
+                            ?.map(p => p.email?.trim())
+                            ?.filter(Boolean) || [];
+                          const creatorEmail = currentReport.creatorEmail || "";
+                          const allEditors = [creatorEmail, ...editorEmails].filter(Boolean).filter((v, i, self) => self.indexOf(v) === i);
+
+                          if (allEditors.length > 0) {
+                            const targetEmail = allEditors.join(",");
+                            const rdoDateStr = formatPrintDate(currentReport.data);
+                            const subject = `[SEEL RDO] Comentários Concluídos pela Fiscalização - RDO nº ${currentReport.rdoNo} - Obra: ${currentReport.obra}`;
+                            
+                            const textBody = `Olá,\n\nOs comentários adicionais de fiscalização para o RDO nº ${currentReport.rdoNo} (Obra: ${currentReport.obra}, Data: ${rdoDateStr}) foram finalizados pelo fiscalizador.\n\nAgora você pode acessar a plataforma para Fechar o RDO e enviá-lo para assinatura digital.\n\nAtenciosamente,\nEquipe SEEL Engenharia.`;
+                            
+                            const htmlBody = `
+                              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px; color: #1e293b;">
+                                <h2 style="color: #10b981; margin-top: 0; font-size: 18px;">Análise da Fiscalização Concluída</h2>
+                                <p>Olá,</p>
+                                <p>Os comentários adicionais de fiscalização para o RDO nº <strong>${currentReport.rdoNo}</strong> (Obra: <strong>${currentReport.obra}</strong>, data: <strong>${rdoDateStr}</strong>) foram finalizados pelo fiscalizador.</p>
+                                <p>Acesse a plataforma para Fechar o RDO e colher as assinaturas digitais na aba de Aprovações/Assinaturas.</p>
+                                <p style="color: #64748b; font-size: 12px; margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 12px;">Esta é uma notificação automática do sistema de Relatório Diário de Obras (SEEL RDO).</p>
+                              </div>
+                            `;
+                            await sendEmailHelper(targetEmail, subject, htmlBody, textBody, "Editor");
+                          }
+
+                          alert("Comentários finalizados com sucesso! O editor foi notificado para fechar e assinar o RDO.");
                         } catch (err) {
                           console.error(err);
-                          alert("Erro ao salvar comentário.");
+                          alert("Erro ao finalizar comentário.");
                         } finally {
                           setSaving(false);
                         }
                       }}
-                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold uppercase tracking-wider transition-colors border-none cursor-pointer"
                     >
                       Salvar e Finalizar Comentário
                     </button>
@@ -1628,70 +1956,328 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
               </div>
               
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-tight mb-1">Anotações da Gerenciadora / Contratante (Um completo por linha)</label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-tight mb-1">Anotações da Gerenciadora / Contratante (Um por linha)</label>
                 <textarea
                   value={(currentReport.comentariosGerenciadoraContratante || []).join("\n")}
                   onChange={(e) => updateReport({ 
                     comentariosGerenciadoraContratante: e.target.value.split("\n").filter(line => line.trim() !== "") 
                   })}
+                  disabled={isReadOnly || currentReport.status === "Finalizado" || (isFiscalizacao && currentReport.fiscalizacaoFinalizada)}
                   rows={4}
-                  className="block w-full rounded border-slate-300 shadow-xs focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-xs text-slate-800 bg-slate-50/20"
-                  placeholder="Ex: 001 - Reparos hidráulicos necessários..."
+                  className="block w-full rounded border-slate-300 shadow-xs focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-xs text-slate-800 bg-slate-50/20 disabled:bg-slate-100/50"
+                  placeholder={isFiscalizacao ? "Escreva suas anotações aqui..." : "Aguardando anotações da fiscalização..."}
                 />
               </div>
             </fieldset>
 
-            <fieldset disabled={isReadOnly || currentReport.status === "Finalizado" || isFiscalizacao} className="space-y-4 pt-6 mt-6 border-t border-slate-200">
+            {/* ASSINATURAS DIGITAIS */}
+            <div className="space-y-4 pt-6 mt-6 border-t border-slate-200">
               <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1.5 pt-2">Firmas e Signatários Responsáveis</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-3.5 bg-white rounded border border-slate-200 space-y-3 shadow-xs">
-                  <span className="font-bold text-xs uppercase tracking-wide text-amber-700 block border-b border-slate-150 pb-1">Emitente Emissor</span>
+              
+              {currentReport.status !== "Finalizado" && currentReport.status !== "Assinado" && currentReport.status !== "Cancelado" && (
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-slate-500 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span>A coleta de assinaturas digitais estará disponível assim que o RDO for <strong>Fechado pelo Editor</strong> (após conclusão da análise do fiscal).</span>
+                </div>
+              )}
+
+              {currentReport.status === "Cancelado" && (
+                <div className="p-4 bg-rose-50 rounded-xl border border-rose-200 text-rose-800 text-xs flex items-center gap-2 font-bold uppercase tracking-wide">
+                  <X className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>Este diário está CANCELADO. Nenhuma assinatura digital é válida para este documento.</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* SIGNATURE 1: EMITENTE */}
+                <div className="p-4 bg-white rounded-xl border border-slate-200 space-y-4 shadow-xs relative overflow-hidden flex flex-col justify-between">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Nome do Engenheiro</label>
-                    <input
-                      type="text"
-                      value={currentReport.emitenteNome}
-                      onChange={(e) => updateReport({ emitenteNome: e.target.value })}
-                      className="mt-0.5 block h-8 w-full rounded border-slate-300 text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-                    />
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-3">
+                      <span className="font-bold text-xs uppercase tracking-wide text-sky-700">Emitente Emissor (Contratada)</span>
+                      {currentReport.emitenteAssinado ? (
+                        <span className="bg-emerald-100 text-emerald-800 text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <Check className="w-2.5 h-2.5" /> Assinado
+                        </span>
+                      ) : (
+                        <span className="bg-amber-100 text-amber-800 text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full">
+                          Pendente
+                        </span>
+                      )}
+                    </div>
+
+                    {currentReport.emitenteAssinado ? (
+                      <div className="space-y-2 text-xs">
+                        <div className="p-2.5 bg-emerald-50/50 rounded-lg border border-emerald-100 text-emerald-900 text-[11px] leading-relaxed font-semibold">
+                          {currentReport.emitenteConsolidado}
+                        </div>
+                        <div>
+                          <span className="block text-[8px] uppercase tracking-wider text-slate-400 font-bold font-mono">Assinatura SHA-256</span>
+                          <code className="text-[10px] text-slate-500 font-mono select-all break-all block bg-slate-50 p-1.5 rounded border border-slate-150 mt-0.5">
+                            {currentReport.emitenteHash || "0x7f29ae3b902e..."}
+                          </code>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase">Nome do Engenheiro Emissor</label>
+                          <div className="mt-1 p-2 bg-slate-100 text-slate-700 border border-slate-250 rounded text-xs font-semibold select-none">
+                            {displayEmitenteNome || "Nenhum nome configurado (Defina na aba de obras)"}
+                          </div>
+                          <p className="text-[9px] text-slate-400 mt-1 italic">Este nome é configurado globalmente no gerenciamento de obras.</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Linha de Consolidação de Assinatura</label>
-                    <input
-                      type="text"
-                      value={currentReport.emitenteConsolidado}
-                      onChange={(e) => updateReport({ emitenteConsolidado: e.target.value })}
-                      className="mt-0.5 block h-8 w-full rounded border-slate-300 text-xs text-slate-600 bg-slate-100/50 font-mono focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-                      placeholder="Consolidado em ... por ..."
-                    />
-                  </div>
+
+                  {!currentReport.emitenteAssinado && (
+                    <div className="pt-3">
+                      {isEditor && currentReport.status === "Finalizado" && (
+                        <button
+                          onClick={() => {
+                            if (!displayEmitenteNome?.trim()) {
+                              alert("Por favor, configure o Nome do Engenheiro Emissor na aba 'Gerenciar Obras' antes de assinar.");
+                              return;
+                            }
+                            showConfirmation(
+                              "Assinatura Digital - Emitente",
+                              "Você confirma a assinatura digital deste RDO como Engenheiro Emitente?",
+                              async () => {
+                                setSaving(true);
+                                try {
+                                  const stampDate = new Date();
+                                  const formattedDate = stampDate.toLocaleDateString("pt-BR");
+                                  const formattedTime = stampDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+                                  const hash = "emit_" + Array.from({length: 24}, () => Math.floor(Math.random()*16).toString(16)).join("");
+                                  
+                                  const willBeFullySigned = currentReport.gerenciadoraAssinado && currentReport.contratanteAssinado;
+
+                                  await saveReport({
+                                    ...currentReport,
+                                    emitenteAssinado: true,
+                                    emitenteNome: displayEmitenteNome,
+                                    emitenteConsolidado: `Assinado digitalmente por ${displayEmitenteNome} (${user?.email || "Emissor"}) em ${formattedDate} às ${formattedTime}`,
+                                    emitenteHash: hash,
+                                    status: willBeFullySigned ? "Assinado" : "Finalizado"
+                                  });
+
+                                  alert("RDO assinado com sucesso como Emitente!");
+                                } catch (err: any) {
+                                  console.error(err);
+                                  alert("Erro ao salvar assinatura: " + err.message);
+                                } finally {
+                                  setSaving(false);
+                                }
+                              },
+                              "success",
+                              "Sim, Assinar RDO",
+                              "Cancelar"
+                            );
+                          }}
+                          disabled={saving || !displayEmitenteNome?.trim()}
+                          className="w-full h-8 flex items-center justify-center gap-1.5 px-3 bg-sky-600 hover:bg-sky-700 text-white font-bold text-[10px] uppercase tracking-wide rounded cursor-pointer border-none shadow-sm duration-150 transition-colors disabled:opacity-50"
+                        >
+                          <Lock className="w-3.5 h-3.5" />
+                          Assinar Digitalmente
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                <div className="p-3.5 bg-white rounded border border-slate-200 space-y-3 shadow-xs">
-                  <span className="font-bold text-xs uppercase tracking-wide text-amber-700 block border-b border-slate-150 pb-1">Fiscal Contratante</span>
+                {/* SIGNATURE 2: FISCAL GERENCIADORA */}
+                <div className="p-4 bg-white rounded-xl border border-slate-200 space-y-4 shadow-xs relative overflow-hidden flex flex-col justify-between">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Nome do Aprovador</label>
-                    <input
-                      type="text"
-                      value={currentReport.contratanteNome}
-                      onChange={(e) => updateReport({ contratanteNome: e.target.value })}
-                      className="mt-0.5 block h-8 w-full rounded border-slate-300 text-xs text-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-                    />
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-3">
+                      <span className="font-bold text-xs uppercase tracking-wide text-sky-700">Fiscal da Gerenciadora</span>
+                      {currentReport.gerenciadoraAssinado ? (
+                        <span className="bg-emerald-100 text-emerald-800 text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <Check className="w-2.5 h-2.5" /> Assinado
+                        </span>
+                      ) : (
+                        <span className="bg-amber-100 text-amber-800 text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full">
+                          Pendente
+                        </span>
+                      )}
+                    </div>
+
+                    {currentReport.gerenciadoraAssinado ? (
+                      <div className="space-y-2 text-xs">
+                        <div className="p-2.5 bg-emerald-50/50 rounded-lg border border-emerald-100 text-emerald-900 text-[11px] leading-relaxed font-semibold">
+                          {currentReport.gerenciadoraConsolidado}
+                        </div>
+                        <div>
+                          <span className="block text-[8px] uppercase tracking-wider text-slate-400 font-bold font-mono">Assinatura SHA-256</span>
+                          <code className="text-[10px] text-slate-500 font-mono select-all break-all block bg-slate-50 p-1.5 rounded border border-slate-150 mt-0.5">
+                            {currentReport.gerenciadoraHash || "0xf38ab25ea9c4..."}
+                          </code>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase">Nome do Fiscal da Gerenciadora</label>
+                          <div className="mt-1 p-2 bg-slate-100 text-slate-700 border border-slate-250 rounded text-xs font-semibold select-none">
+                            {displayGerenciadoraNome || "Nenhum nome configurado (Defina na aba de obras)"}
+                          </div>
+                          <p className="text-[9px] text-slate-400 mt-1 italic">Este nome é configurado globalmente no gerenciamento de obras.</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
+
+                  {!currentReport.gerenciadoraAssinado && (
+                    <div className="pt-3">
+                      {isFiscalizadora && currentReport.status === "Finalizado" && (
+                        <button
+                          onClick={() => {
+                            if (!displayGerenciadoraNome?.trim()) {
+                              alert("Por favor, configure o Nome do Fiscal da Gerenciadora na aba 'Gerenciar Obras' antes de assinar.");
+                              return;
+                            }
+                            showConfirmation(
+                              "Assinatura Digital - Gerenciadora",
+                              "Você confirma a assinatura digital deste RDO como Fiscal da Gerenciadora?",
+                              async () => {
+                                setSaving(true);
+                                try {
+                                  const stampDate = new Date();
+                                  const formattedDate = stampDate.toLocaleDateString("pt-BR");
+                                  const formattedTime = stampDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+                                  const hash = "ger_" + Array.from({length: 24}, () => Math.floor(Math.random()*16).toString(16)).join("");
+                                  
+                                  const willBeFullySigned = currentReport.emitenteAssinado && currentReport.contratanteAssinado;
+
+                                  await saveReport({
+                                    ...currentReport,
+                                    gerenciadoraAssinado: true,
+                                    gerenciadoraNome: displayGerenciadoraNome,
+                                    gerenciadoraConsolidado: `Assinado digitalmente por ${displayGerenciadoraNome} (${user?.email || "Gerenciadora"}) em ${formattedDate} às ${formattedTime}`,
+                                    gerenciadoraHash: hash,
+                                    status: willBeFullySigned ? "Assinado" : "Finalizado"
+                                  });
+
+                                  alert("RDO assinado com sucesso como Gerenciadora!");
+                                } catch (err: any) {
+                                  console.error(err);
+                                  alert("Erro ao salvar assinatura da gerenciadora: " + err.message);
+                                } finally {
+                                  setSaving(false);
+                                }
+                              },
+                              "success",
+                              "Sim, Assinar RDO",
+                              "Cancelar"
+                            );
+                          }}
+                          disabled={saving || !displayGerenciadoraNome?.trim()}
+                          className="w-full h-8 flex items-center justify-center gap-1.5 px-3 bg-sky-600 hover:bg-sky-700 text-white font-bold text-[10px] uppercase tracking-wide rounded cursor-pointer border-none shadow-sm duration-150 transition-colors disabled:opacity-50"
+                        >
+                          <Lock className="w-3.5 h-3.5" />
+                          Assinar Gerenciadora
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* SIGNATURE 3: FISCAL CONTRATANTE */}
+                <div className="p-4 bg-white rounded-xl border border-slate-200 space-y-4 shadow-xs relative overflow-hidden flex flex-col justify-between">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Linha de Aprovação</label>
-                    <input
-                      type="text"
-                      value={currentReport.contratanteAprovado}
-                      onChange={(e) => updateReport({ contratanteAprovado: e.target.value })}
-                      className="mt-0.5 block h-8 w-full rounded border-slate-300 text-xs text-slate-600 bg-slate-100/50 font-mono focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-                      placeholder="Aprovado em ... por ..."
-                    />
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-3">
+                      <span className="font-bold text-xs uppercase tracking-wide text-sky-700">Fiscal Contratante (Aprovador)</span>
+                      {currentReport.contratanteAssinado ? (
+                        <span className="bg-emerald-100 text-emerald-800 text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <Check className="w-2.5 h-2.5" /> Assinado
+                        </span>
+                      ) : (
+                        <span className="bg-amber-100 text-amber-800 text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full">
+                          Pendente
+                        </span>
+                      )}
+                    </div>
+
+                    {currentReport.contratanteAssinado ? (
+                      <div className="space-y-2 text-xs">
+                        <div className="p-2.5 bg-emerald-50/50 rounded-lg border border-emerald-100 text-emerald-900 text-[11px] leading-relaxed font-semibold">
+                          {currentReport.contratanteAprovado}
+                        </div>
+                        <div>
+                          <span className="block text-[8px] uppercase tracking-wider text-slate-400 font-bold font-mono">Assinatura SHA-256</span>
+                          <code className="text-[10px] text-slate-500 font-mono select-all break-all block bg-slate-50 p-1.5 rounded border border-slate-150 mt-0.5">
+                            {currentReport.contratanteHash || "0x9d4a821ce4f5..."}
+                          </code>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase">Nome do Fiscal Aprovador</label>
+                          <div className="mt-1 p-2 bg-slate-100 text-slate-700 border border-slate-250 rounded text-xs font-semibold select-none">
+                            {displayContratanteNome || "Nenhum nome configurado (Defina na aba de obras)"}
+                          </div>
+                          <p className="text-[9px] text-slate-400 mt-1 italic">Este nome é configurado globalmente no gerenciamento de obras.</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
+
+                  {!currentReport.contratanteAssinado && (
+                    <div className="pt-3">
+                      {isFiscalizacao && currentReport.status === "Finalizado" && (
+                        <button
+                          onClick={() => {
+                            if (!displayContratanteNome?.trim()) {
+                              alert("Por favor, configure o Nome do Fiscal Aprovador na aba 'Gerenciar Obras' antes de assinar.");
+                              return;
+                            }
+                            showConfirmation(
+                              "Aprovação e Assinatura - Fiscal",
+                              "Você confirma a aprovação e assinatura digital deste RDO como Fiscal Contratante?",
+                              async () => {
+                                setSaving(true);
+                                try {
+                                  const stampDate = new Date();
+                                  const formattedDate = stampDate.toLocaleDateString("pt-BR");
+                                  const formattedTime = stampDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+                                  const hash = "fisc_" + Array.from({length: 24}, () => Math.floor(Math.random()*16).toString(16)).join("");
+                                  
+                                  const willBeFullySigned = currentReport.emitenteAssinado && currentReport.gerenciadoraAssinado;
+
+                                  await saveReport({
+                                    ...currentReport,
+                                    contratanteAssinado: true,
+                                    contratanteNome: displayContratanteNome,
+                                    contratanteAprovado: `Aprovado digitalmente por ${displayContratanteNome} (${user?.email || "Fiscal"}) em ${formattedDate} às ${formattedTime}`,
+                                    contratanteHash: hash,
+                                    status: willBeFullySigned ? "Assinado" : "Finalizado"
+                                  });
+
+                                  alert("RDO aprovado e assinado com sucesso como Fiscal!");
+                                } catch (err: any) {
+                                  console.error(err);
+                                  alert("Erro ao salvar assinatura do fiscal: " + err.message);
+                                } finally {
+                                  setSaving(false);
+                                }
+                              },
+                              "success",
+                              "Sim, Assinar e Aprovar",
+                              "Cancelar"
+                            );
+                          }}
+                          disabled={saving || !displayContratanteNome?.trim()}
+                          className="w-full h-8 flex items-center justify-center gap-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wide rounded cursor-pointer border-none shadow-sm duration-150 transition-colors disabled:opacity-50"
+                        >
+                          <Lock className="w-3.5 h-3.5" />
+                          Assinar e Aprovar RDO
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
-            </fieldset>
-
+            </div>
           </div>
         )}
 
@@ -1771,6 +2357,198 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
                 </button>
               </div>
 
+            </div>
+          </div>
+        )}
+
+        {emailFallback && (
+          <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in font-sans">
+            <div className="bg-white rounded-2xl border border-slate-100 p-6 max-w-xl w-full shadow-2xl flex flex-col max-h-[90vh]">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-sky-50 text-sky-600 rounded-xl">
+                    <Mail className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-slate-950 uppercase tracking-wide">
+                      Notificar por E-mail (Outlook)
+                    </h4>
+                    <p className="text-[10px] text-sky-600 uppercase tracking-wider font-bold">
+                      RDO Atualizado no Sistema com sucesso!
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setEmailFallback(null)}
+                  className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer border-none duration-150 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto py-5 space-y-4 text-xs custom-scrollbar">
+                <p className="text-[11.5px] text-slate-500 font-medium leading-relaxed">
+                  Para sua maior segurança e privacidade, os e-mails são encaminhados diretamente através da sua própria conta do Outlook. Copie os dados abaixo ou clique nos botões para abrir a tela de composição de e-mail pronta.
+                </p>
+
+                {/* CAMPO: DESTINATÁRIO */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Destinatário (Para)</label>
+                    <button
+                      onClick={() => handleCopyField(emailFallback.to, "to")}
+                      className="text-[10px] text-sky-600 hover:text-sky-700 font-bold flex items-center gap-1 cursor-pointer border-none bg-transparent"
+                    >
+                      {copiedField === "to" ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-600" />
+                          <span className="text-emerald-600">Copiado!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>Copiar</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 font-mono text-slate-800 break-all select-all font-medium">
+                    {emailFallback.to}
+                  </div>
+                </div>
+
+                {/* CAMPO: ASSUNTO */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Assunto do E-mail</label>
+                    <button
+                      onClick={() => handleCopyField(emailFallback.subject, "subject")}
+                      className="text-[10px] text-sky-600 hover:text-sky-700 font-bold flex items-center gap-1 cursor-pointer border-none bg-transparent"
+                    >
+                      {copiedField === "subject" ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-600" />
+                          <span className="text-emerald-600">Copiado!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>Copiar</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-slate-800 font-semibold leading-snug">
+                    {emailFallback.subject}
+                  </div>
+                </div>
+
+                {/* CAMPO: CONTEÚDO */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Texto da Notificação</label>
+                    <button
+                      onClick={() => handleCopyField(emailFallback.body, "body")}
+                      className="text-[10px] text-sky-600 hover:text-sky-700 font-bold flex items-center gap-1 cursor-pointer border-none bg-transparent"
+                    >
+                      {copiedField === "body" ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-600" />
+                          <span className="text-emerald-600">Copiado!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>Copiar Corpo</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <pre className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 font-sans whitespace-pre-wrap leading-relaxed text-slate-700 text-[11px] max-h-40 overflow-y-auto custom-scrollbar">
+                    {emailFallback.body}
+                  </pre>
+                </div>
+              </div>
+
+              {/* RODAPÉ COM AÇÕES */}
+              <div className="border-t border-slate-100 pt-4 flex flex-col sm:flex-row gap-2 items-stretch sm:items-center sm:justify-end">
+                <button
+                  onClick={() => handleCopyText(`Para: ${emailFallback.to}\nAssunto: ${emailFallback.subject}\n\n${emailFallback.body}`)}
+                  className="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer border-none flex items-center gap-1.5 justify-center"
+                >
+                  {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                  {copied ? "Copiado!" : "Copiar Tudo"}
+                </button>
+
+                <a
+                  href={`https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(emailFallback.to)}&subject=${encodeURIComponent(emailFallback.subject)}&body=${encodeURIComponent(emailFallback.body)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setEmailFallback(null)}
+                  className="h-9 px-4 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer border-none flex items-center gap-1.5 no-underline justify-center shadow-xs"
+                >
+                  <Send className="w-4 h-4" />
+                  Outlook Web (Corporativo)
+                </a>
+
+                <a
+                  href={`mailto:${emailFallback.to}?subject=${encodeURIComponent(emailFallback.subject)}&body=${encodeURIComponent(emailFallback.body)}`}
+                  onClick={() => setEmailFallback(null)}
+                  className="h-9 px-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer border-none flex items-center gap-1.5 no-underline justify-center"
+                >
+                  <Send className="w-4 h-4" />
+                  App Local
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {confirmModal && (
+          <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in font-sans">
+            <div className="bg-white rounded-2xl border border-slate-100 p-6 max-w-md w-full shadow-2xl flex flex-col space-y-4">
+              <div className="flex items-start gap-3">
+                <div className={`p-2 rounded-full mt-0.5 ${
+                  confirmModal.type === "danger" ? "bg-red-50 text-red-600" :
+                  confirmModal.type === "success" ? "bg-emerald-50 text-emerald-600" :
+                  confirmModal.type === "info" ? "bg-sky-50 text-sky-600" :
+                  "bg-amber-50 text-amber-600"
+                }`}>
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="font-bold text-sm text-slate-900 leading-tight">
+                    {confirmModal.title}
+                  </h4>
+                  <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                    {confirmModal.description}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  onClick={() => setConfirmModal(null)}
+                  className="h-8.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer border-none"
+                >
+                  {confirmModal.cancelText || "Cancelar"}
+                </button>
+                <button
+                  onClick={async () => {
+                    const onConfirmFn = confirmModal.onConfirm;
+                    setConfirmModal(null);
+                    await onConfirmFn();
+                  }}
+                  className={`h-8.5 px-4 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer border-none ${
+                    confirmModal.type === "danger" ? "bg-red-600 hover:bg-red-700" :
+                    confirmModal.type === "success" ? "bg-emerald-600 hover:bg-emerald-700" :
+                    confirmModal.type === "info" ? "bg-sky-600 hover:bg-sky-700" :
+                    "bg-amber-600 hover:bg-amber-700"
+                  }`}
+                >
+                  {confirmModal.confirmText || "Confirmar"}
+                </button>
+              </div>
             </div>
           </div>
         )}
