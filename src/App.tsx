@@ -60,6 +60,11 @@ function AppContent() {
     setCurrentObra
   } = useRdoStore();
 
+  const currentUserEmail = user && 'email' in user ? (user.email?.toLowerCase() || "") : "";
+  const permission = currentObra?.permissoes?.find(p => p?.email?.toLowerCase() === currentUserEmail);
+  const accessLevel = permission ? permission.access : (currentObra?.userId === user?.uid ? "owner" : "view");
+  const canManageObras = accessLevel !== "view" && accessLevel !== "fiscalizacao" && accessLevel !== "gerenciadora";
+
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"todos" | "Em Digitação" | "Finalizado" | "Assinado">("todos");
   const [activeView, setActiveView] = useState<"rdo" | "relatorios">("rdo");
@@ -182,7 +187,7 @@ function AppContent() {
               }`}
             >
               <BarChart3 className="w-3.5 h-3.5" />
-              Consolidados
+              Relatórios Gerenciais
             </button>
           </div>
         </div>
@@ -228,12 +233,14 @@ function AppContent() {
           <div className="p-4 pb-2 border-b border-slate-800/80 space-y-1.5 shrink-0 bg-slate-950/60">
             <div className="flex items-center justify-between">
               <label className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Obra Ativa</label>
-              <button
-                onClick={() => setShowObraManager(true)}
-                className="text-[9px] text-amber-500 hover:text-amber-400 font-bold uppercase tracking-wider hover:underline"
-              >
-                Gerenciar Obras
-              </button>
+              {canManageObras && (
+                <button
+                  onClick={() => setShowObraManager(true)}
+                  className="text-[9px] text-amber-500 hover:text-amber-400 font-bold uppercase tracking-wider hover:underline"
+                >
+                  Gerenciar Obras
+                </button>
+              )}
             </div>
             <select
               value={currentObra?.id || ""}

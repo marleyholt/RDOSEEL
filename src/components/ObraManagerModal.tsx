@@ -762,12 +762,13 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
                 />
                 <select
                   value={newPermAccess}
-                  onChange={(e) => setNewPermAccess(e.target.value as "view" | "edit" | "fiscalizacao")}
+                  onChange={(e) => setNewPermAccess(e.target.value as "view" | "edit" | "fiscalizacao" | "gerenciadora")}
                   className="bg-white border border-slate-300 rounded p-2 text-xs outline-none focus:ring-1 focus:ring-amber-500 font-semibold"
                 >
                   <option value="view">Visualização</option>
                   <option value="edit">Edição</option>
                   <option value="fiscalizacao">Fiscalização</option>
+                  <option value="gerenciadora">Gerenciadora</option>
                 </select>
                 <button
                   type="button"
@@ -797,10 +798,12 @@ export const ObraManagerModal: React.FC<ObraManagerModalProps> = ({ isOpen, onCl
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold leading-none ${
                               p.access === "edit" ? "bg-blue-50 text-blue-700 border border-blue-200" :
                               p.access === "fiscalizacao" ? "bg-amber-50 text-amber-700 border border-amber-200" : 
+                              p.access === "gerenciadora" ? "bg-indigo-50 text-indigo-700 border border-indigo-200" :
                               "bg-emerald-50 text-emerald-700 border border-emerald-200"
                             }`}>
                               {p.access === "edit" ? "EDIÇÃO (ESCRITA)" : 
                                p.access === "fiscalizacao" ? "FISCALIZAÇÃO" : 
+                               p.access === "gerenciadora" ? "GERENCIADORA" :
                                "LEITURA (VISUALIZAÇÃO)"}
                             </span>
                           </td>

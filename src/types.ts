@@ -137,7 +137,10 @@ export interface RdoReport {
   efetivoDetalhado: CompanyLaborGroup[];
   equipamentosDetalhado: EquipmentMobilizedDetail[];
   comentariosGerenciadoraContratante: string[];
+  comentariosFiscalizacao?: string[];
+  comentariosGerenciadora?: string[];
   fiscalizacaoFinalizada?: boolean; // Tracking if fiscalização has been approved/finalized
+  gerenciadoraFinalizada?: boolean; // Tracking if gerenciadora has been approved/finalized
   
   // Signatures
   emitenteNome: string;

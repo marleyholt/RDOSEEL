@@ -315,7 +315,7 @@ export const ConsolidatedReports: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-4 mb-6">
         <div>
           <span className="text-[10px] text-amber-600 font-extrabold uppercase tracking-widest bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-            Módulo Consolidado
+            Relatórios Gerenciais
           </span>
           <h2 className="text-xl font-bold text-slate-900 mt-1.5 flex items-center gap-2">
             Relatórios e Estatísticas da Obra
