@@ -158,7 +158,7 @@ function AppContent() {
               <HardHat className="w-4 h-4 text-slate-900" />
             </div>
             <div>
-              <h1 className="font-extrabold text-sm tracking-tight text-slate-950 leading-none">CONSTRUTOR PRO</h1>
+              <h1 className="font-extrabold text-sm tracking-tight text-slate-950 leading-none">RDO WEB SEEL</h1>
               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">SEEL ENGENHARIA</p>
             </div>
           </div>
@@ -204,7 +204,7 @@ function AppContent() {
           {isFirebase ? (
             <div className="bg-green-50 border border-green-150 px-2.5 py-0.5 rounded text-[10px] font-bold text-green-700 flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-              SINCRONIZADO (FIREBASE)
+              BANCO DE DADOS SINCRONIZADO
             </div>
           ) : (
             <div className="bg-amber-50 border border-amber-100 px-2.5 py-0.5 rounded text-[10px] font-bold text-amber-800 flex items-center gap-1" title="Seu diário é salvo com segurança no LocalStorage do seu navegador">

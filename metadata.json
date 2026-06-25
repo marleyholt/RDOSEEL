@@ -1,5 +1,5 @@
 {
-  "name": "Diário de Obras RDO",
+  "name": "RDO WEB SEEL",
   "description": "Alimentação e geração de PDF padrão para Diário de Obras com histórico, assinaturas e autenticação.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
