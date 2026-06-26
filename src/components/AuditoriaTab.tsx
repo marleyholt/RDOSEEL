@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { Activity, Clock, User, ShieldAlert } from "lucide-react";
+import { Activity, Clock, User, ShieldAlert, Download } from "lucide-react";
 import { useRdoStore } from "../context/RdoContext";
 import { AuditLog } from "../types";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 
 export const AuditoriaTab: React.FC = () => {
   const { getAuditLogs, isGlobalAdmin } = useRdoStore();
@@ -21,6 +23,34 @@ export const AuditoriaTab: React.FC = () => {
     setIsLoading(false);
   };
 
+  const handleExportExcel = () => {
+    if (logs.length === 0) return;
+
+    const dataToExport = logs.map(log => ({
+      Data: new Date(log.timestamp).toLocaleString("pt-BR"),
+      Ação: log.action,
+      Usuário: log.userEmail,
+      Detalhes: log.details
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Auditoria");
+
+    // Formatar colunas
+    const wscols = [
+      { wch: 20 }, // Data
+      { wch: 15 }, // Ação
+      { wch: 25 }, // Usuário
+      { wch: 60 }  // Detalhes
+    ];
+    worksheet["!cols"] = wscols;
+
+    const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+    const data = new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8" });
+    saveAs(data, `RDO_Auditoria_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   if (!isGlobalAdmin) {
     return (
       <div className="h-full flex flex-col justify-center items-center text-center p-6 space-y-4">
@@ -38,12 +68,23 @@ export const AuditoriaTab: React.FC = () => {
           <Activity className="w-5 h-5" />
           <h2 className="font-bold uppercase tracking-wider text-sm">Auditoria do Sistema</h2>
         </div>
-        <button
-          onClick={loadLogs}
-          className="text-xs font-bold px-3 py-1.5 bg-white border border-slate-300 rounded shadow-xs hover:bg-slate-50 text-slate-700 transition-colors"
-        >
-          Atualizar
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleExportExcel}
+            disabled={logs.length === 0}
+            className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 bg-emerald-600 border border-emerald-700 rounded shadow-xs hover:bg-emerald-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Exportar para Excel"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Excel
+          </button>
+          <button
+            onClick={loadLogs}
+            className="text-xs font-bold px-3 py-1.5 bg-white border border-slate-300 rounded shadow-xs hover:bg-slate-50 text-slate-700 transition-colors"
+          >
+            Atualizar
+          </button>
+        </div>
       </div>
       
       <div className="flex-1 overflow-y-auto p-4">

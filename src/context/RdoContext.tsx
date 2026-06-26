@@ -457,6 +457,25 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedAt: new Date().toISOString(),
     };
 
+    const oldReport = report.id ? reports.find(r => r.id === report.id) : null;
+    
+    let logMessage = `RDO ${reportToSave.rdoNo} da obra ${reportToSave.obra} (Data: ${reportToSave.data}) ${report.id ? "atualizado" : "criado"}. Status: ${reportToSave.status}`;
+    let logActionType = report.id ? "UPDATE_RDO" : "CREATE_RDO";
+
+    if (oldReport) {
+      if (oldReport.status !== reportToSave.status) {
+        logActionType = "STATUS_CHANGE";
+        logMessage = `Status do RDO ${reportToSave.rdoNo} da obra ${reportToSave.obra} alterado de '${oldReport.status}' para '${reportToSave.status}'.`;
+      } else if (
+        (oldReport.assinaturas?.fiscalizacao?.assinado !== reportToSave.assinaturas?.fiscalizacao?.assinado) ||
+        (oldReport.assinaturas?.gerenciadora?.assinado !== reportToSave.assinaturas?.gerenciadora?.assinado) ||
+        (oldReport.assinaturas?.contratada?.assinado !== reportToSave.assinaturas?.contratada?.assinado)
+      ) {
+        logActionType = "SIGNATURE_UPDATE";
+        logMessage = `Assinaturas atualizadas no RDO ${reportToSave.rdoNo} da obra ${reportToSave.obra}.`;
+      }
+    }
+
     if (activeIsFirebase && db) {
       const path = "rdos";
       try {
@@ -475,10 +494,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setReports(prev => [cleanedReport, ...prev]);
         }
         setCurrentReport(reportToSave);
-        await logAction(
-          report.id ? "UPDATE_RDO" : "CREATE_RDO", 
-          `RDO ${reportToSave.rdoNo} da obra ${reportToSave.obra} (Data: ${reportToSave.data}) ${report.id ? "atualizado" : "criado"}. Status: ${reportToSave.status}`
-        );
+        await logAction(logActionType, logMessage);
       } catch (error) {
         handleFirestoreError(error, OperationType.WRITE, path);
       }
@@ -502,6 +518,13 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Delete Report
   const deleteReport = async (id: string) => {
     if (!user) throw new Error("Usuário não autenticado");
+    
+    // Find report details before deletion
+    const reportToDelete = reports.find(r => r.id === id);
+    let logMessage = `RDO (ID: ${id}) deletado.`;
+    if (reportToDelete) {
+      logMessage = `RDO ${reportToDelete.rdoNo} da obra ${reportToDelete.obra} (Data: ${reportToDelete.data}) deletado. Status: ${reportToDelete.status}`;
+    }
 
     if (activeIsFirebase && db) {
       const path = `rdos/${id}`;
@@ -512,7 +535,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const remaining = reports.filter(r => r.id !== id);
           setCurrentReport(remaining.length > 0 ? remaining[0] : null);
         }
-        await logAction("DELETE_RDO", `RDO (ID: ${id}) deletado.`);
+        await logAction("DELETE_RDO", logMessage);
       } catch (error) {
         handleFirestoreError(error, OperationType.DELETE, path);
       }
@@ -524,6 +547,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (currentReport?.id === id) {
         setCurrentReport(updatedReports.length > 0 ? updatedReports[0] : null);
       }
+      await logAction("DELETE_RDO", logMessage);
     }
   };
 
@@ -966,6 +990,12 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteObra = async (id: string) => {
     if (!user) throw new Error("Usuário não autenticado");
 
+    const obraToDelete = obras.find(o => o.id === id);
+    let logMessage = `Obra (ID: ${id}) deletada.`;
+    if (obraToDelete) {
+      logMessage = `Obra ${obraToDelete.nome} (ID: ${id}) deletada.`;
+    }
+
     if (activeIsFirebase && db) {
       const path = `obras/${id}`;
       try {
@@ -975,7 +1005,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (currentObra?.id === id) {
           setCurrentObra(remaining.length > 0 ? remaining[0] : null);
         }
-        await logAction("DELETE_OBRA", `Obra (ID: ${id}) deletada.`);
+        await logAction("DELETE_OBRA", logMessage);
       } catch (error) {
         handleFirestoreError(error, OperationType.DELETE, path);
       }

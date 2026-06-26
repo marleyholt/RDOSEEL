@@ -869,17 +869,23 @@ export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, reportsToPri
   const totalReportsCount = reportsArray.length;
   const currentActiveReport = reportsArray[activeIndex] || null;
 
-  const triggerPrintCombined = async () => {
-    window.print();
+  const triggerPrintCombined = () => {
+    window.focus();
+    setTimeout(() => {
+      window.print();
+    }, 100);
   };
 
-  const triggerPrintSingleAndAdvance = async () => {
-    window.print();
-    if (activeIndex < totalReportsCount - 1) {
-      setTimeout(() => {
-        setActiveIndex(prev => prev + 1);
-      }, 300);
-    }
+  const triggerPrintSingleAndAdvance = () => {
+    window.focus();
+    setTimeout(() => {
+      window.print();
+      if (activeIndex < totalReportsCount - 1) {
+        setTimeout(() => {
+          setActiveIndex(prev => prev + 1);
+        }, 300);
+      }
+    }, 100);
   };
 
   return (
