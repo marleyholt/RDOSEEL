@@ -10,6 +10,7 @@ import { RdoEditor } from "./components/RdoEditor";
 import { RdoPrintView } from "./components/RdoPrintView";
 import { ObraManagerModal } from "./components/ObraManagerModal";
 import { ConsolidatedReports } from "./components/ConsolidatedReports";
+import { AuditoriaTab } from "./components/AuditoriaTab";
 import { RdoReport } from "./types";
 import { 
   HardHat, 
@@ -23,6 +24,7 @@ import {
   Clock, 
   Sparkles,
   Info,
+  Activity,
   Calendar,
   Printer,
   BarChart3
@@ -57,17 +59,19 @@ function AppContent() {
     createNewReport,
     obras,
     currentObra,
-    setCurrentObra
+    setCurrentObra,
+    isGlobalAdmin,
+    getAuditLogs
   } = useRdoStore();
 
   const currentUserEmail = user && 'email' in user ? (user.email?.toLowerCase() || "") : "";
   const permission = currentObra?.permissoes?.find(p => p?.email?.toLowerCase() === currentUserEmail);
   const accessLevel = permission ? permission.access : (currentObra?.userId === user?.uid ? "owner" : "view");
-  const canManageObras = accessLevel !== "view" && accessLevel !== "fiscalizacao" && accessLevel !== "gerenciadora";
+  const canManageObras = isGlobalAdmin || (accessLevel !== "view" && accessLevel !== "fiscalizacao" && accessLevel !== "gerenciadora");
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"todos" | "Em Digitação" | "Finalizado" | "Assinado">("todos");
-  const [activeView, setActiveView] = useState<"rdo" | "relatorios">("rdo");
+  const [activeView, setActiveView] = useState<"rdo" | "relatorios" | "auditoria">("rdo");
   const [showPrintView, setShowPrintView] = useState(false);
   const [showBatchPrint, setShowBatchPrint] = useState(false);
   const [showBatchPrintConfig, setShowBatchPrintConfig] = useState(false);
@@ -189,6 +193,19 @@ function AppContent() {
               <BarChart3 className="w-3.5 h-3.5" />
               Relatórios Gerenciais
             </button>
+            {isGlobalAdmin && (
+              <button
+                onClick={() => { setActiveView("auditoria"); setShowPrintView(false); }}
+                className={`px-3 h-8 rounded-md text-[10px] font-extrabold uppercase tracking-wider transition-all border-none cursor-pointer flex items-center gap-1.5 ${
+                  activeView === "auditoria"
+                    ? "bg-indigo-600 text-white shadow-xs"
+                    : "text-slate-500 hover:text-indigo-600 hover:bg-indigo-50"
+                }`}
+              >
+                <Activity className="w-3.5 h-3.5" />
+                Auditoria
+              </button>
+            )}
           </div>
         </div>
 
@@ -428,7 +445,9 @@ function AppContent() {
 
         {/* ACTIVE WORKSPACE AREA: Form editor on select */}
         <main className="flex-1 bg-slate-50/50 overflow-y-auto p-5 no-print">
-          {activeView === "relatorios" ? (
+          {activeView === "auditoria" && isGlobalAdmin ? (
+            <AuditoriaTab />
+          ) : activeView === "relatorios" ? (
             <ConsolidatedReports />
           ) : currentReport ? (
             <RdoEditor onShowPrint={() => setShowPrintView(true)} />

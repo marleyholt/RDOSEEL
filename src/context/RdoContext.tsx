@@ -10,7 +10,8 @@ import {
   EquipmentMobilizedDetail, 
   Activity, 
   StoppagesDetail,
-  ObraConfig
+  ObraConfig,
+  AuditLog
 } from "../types";
 import { 
   isFirebaseConfigured, 
@@ -65,12 +66,19 @@ interface RdoContextType {
   saveObra: (obra: ObraConfig) => Promise<void>;
   deleteObra: (id: string) => Promise<void>;
   isObrasLoading: boolean;
+  
+  // Admin & Audit
+  isGlobalAdmin: boolean;
+  logAction: (action: string, details: string) => Promise<void>;
+  getAuditLogs: () => Promise<AuditLog[]>;
 }
 
 const RdoContext = createContext<RdoContextType | undefined>(undefined);
 
 const LOCAL_REPORTS_KEY = "rdo_reports_local";
 const LOCAL_USER_KEY = "rdo_user_local";
+
+const GLOBAL_ADMINS = ["adm@adm.com", "dev@seel.com.br"];
 
 const DEFAULT_OBRAS: ObraConfig[] = [
   {
@@ -107,6 +115,8 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [obras, setObras] = useState<ObraConfig[]>([]);
   const [currentObra, setCurrentObra] = useState<ObraConfig | null>(null);
   const [isObrasLoading, setIsObrasLoading] = useState(false);
+  
+  const isGlobalAdmin = user?.email ? GLOBAL_ADMINS.includes(user.email.toLowerCase()) : false;
 
   const [useLocalFallback, setUseLocalFallbackState] = useState(() => {
     return localStorage.getItem("rdo_use_local_mode") === "true";
@@ -159,26 +169,36 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const fetchFirebaseObras = async () => {
         setIsObrasLoading(true);
         try {
-          // Fetch Obras created by me
-          const qOwn = query(collection(db, "obras"), where("userId", "==", user.uid));
-          const snapOwn = await getDocs(qOwn);
           const loadedMap: Record<string, ObraConfig> = {};
-          
-          snapOwn.forEach((docSnap) => {
-            loadedMap[docSnap.id] = { id: docSnap.id, ...docSnap.data() } as ObraConfig;
-          });
 
-          // Fetch Obras shared with my email
-          if (user.email) {
-            const userEmailLower = user.email.toLowerCase();
-            const qShared = query(
-              collection(db, "obras"), 
-              where("permissoesEmails", "array-contains", userEmailLower)
-            );
-            const snapShared = await getDocs(qShared);
-            snapShared.forEach((docSnap) => {
+          if (isGlobalAdmin) {
+            // Fetch ALL Obras
+            const qAll = query(collection(db, "obras"));
+            const snapAll = await getDocs(qAll);
+            snapAll.forEach((docSnap) => {
               loadedMap[docSnap.id] = { id: docSnap.id, ...docSnap.data() } as ObraConfig;
             });
+          } else {
+            // Fetch Obras created by me
+            const qOwn = query(collection(db, "obras"), where("userId", "==", user.uid));
+            const snapOwn = await getDocs(qOwn);
+            
+            snapOwn.forEach((docSnap) => {
+              loadedMap[docSnap.id] = { id: docSnap.id, ...docSnap.data() } as ObraConfig;
+            });
+
+            // Fetch Obras shared with my email
+            if (user.email) {
+              const userEmailLower = user.email.toLowerCase();
+              const qShared = query(
+                collection(db, "obras"), 
+                where("permissoesEmails", "array-contains", userEmailLower)
+              );
+              const snapShared = await getDocs(qShared);
+              snapShared.forEach((docSnap) => {
+                loadedMap[docSnap.id] = { id: docSnap.id, ...docSnap.data() } as ObraConfig;
+              });
+            }
           }
 
           const loaded = Object.values(loadedMap);
@@ -229,6 +249,34 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       loadLocalObras();
     }
   }, [user, isLoading, activeIsFirebase]);
+
+  const logAction = async (action: string, details: string) => {
+    if (!user || !activeIsFirebase || !db) return;
+    try {
+      const logEntry: AuditLog = {
+        userId: user.uid,
+        userEmail: user.email || "unknown",
+        action,
+        details,
+        timestamp: new Date().toISOString()
+      };
+      await addDoc(collection(db, "audit_logs"), logEntry);
+    } catch (e) {
+      console.error("Failed to log action", e);
+    }
+  };
+
+  const getAuditLogs = async (): Promise<AuditLog[]> => {
+    if (!activeIsFirebase || !db) return [];
+    try {
+      const qLogs = query(collection(db, "audit_logs"), orderBy("timestamp", "desc"));
+      const snap = await getDocs(qLogs);
+      return snap.docs.map(d => ({ id: d.id, ...d.data() } as AuditLog));
+    } catch (e) {
+      console.error("Failed to fetch audit logs", e);
+      return [];
+    }
+  };
 
   const loadLocalObras = () => {
     const raw = localStorage.getItem("rdo_obras_local");
@@ -427,6 +475,10 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setReports(prev => [cleanedReport, ...prev]);
         }
         setCurrentReport(reportToSave);
+        await logAction(
+          report.id ? "UPDATE_RDO" : "CREATE_RDO", 
+          `RDO ${reportToSave.rdoNo} da obra ${reportToSave.obra} (Data: ${reportToSave.data}) ${report.id ? "atualizado" : "criado"}. Status: ${reportToSave.status}`
+        );
       } catch (error) {
         handleFirestoreError(error, OperationType.WRITE, path);
       }
@@ -460,6 +512,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const remaining = reports.filter(r => r.id !== id);
           setCurrentReport(remaining.length > 0 ? remaining[0] : null);
         }
+        await logAction("DELETE_RDO", `RDO (ID: ${id}) deletado.`);
       } catch (error) {
         handleFirestoreError(error, OperationType.DELETE, path);
       }
@@ -881,6 +934,10 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setObras(prev => [savedWithId, ...prev]);
           setCurrentObra(savedWithId);
         }
+        await logAction(
+          obra.id ? "UPDATE_OBRA" : "CREATE_OBRA", 
+          `Obra ${obraToSave.nome} (ID: ${obra.id || 'novo'}) ${obra.id ? "atualizada" : "criada"}.`
+        );
       } catch (error) {
         handleFirestoreError(error, OperationType.WRITE, path);
       }
@@ -918,6 +975,7 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (currentObra?.id === id) {
           setCurrentObra(remaining.length > 0 ? remaining[0] : null);
         }
+        await logAction("DELETE_OBRA", `Obra (ID: ${id}) deletada.`);
       } catch (error) {
         handleFirestoreError(error, OperationType.DELETE, path);
       }
@@ -962,7 +1020,11 @@ export const RdoProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCurrentObra,
       saveObra,
       deleteObra,
-      isObrasLoading
+      isObrasLoading,
+      // Admin
+      isGlobalAdmin,
+      logAction,
+      getAuditLogs
     }}>
       {children}
     </RdoContext.Provider>

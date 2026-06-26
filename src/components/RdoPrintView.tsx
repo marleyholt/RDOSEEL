@@ -862,11 +862,18 @@ export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, reportsToPri
   const [exportMode, setExportMode] = React.useState<"single" | "individual">(batchPrintedMode);
   const [activeIndex, setActiveIndex] = React.useState(0);
 
-  const triggerPrintCombined = () => {
+  const reportsArray = reportsToPrint && reportsToPrint.length > 0
+    ? reportsToPrint
+    : (report ? [report] : []);
+
+  const totalReportsCount = reportsArray.length;
+  const currentActiveReport = reportsArray[activeIndex] || null;
+
+  const triggerPrintCombined = async () => {
     window.print();
   };
 
-  const triggerPrintSingleAndAdvance = () => {
+  const triggerPrintSingleAndAdvance = async () => {
     window.print();
     if (activeIndex < totalReportsCount - 1) {
       setTimeout(() => {
@@ -874,13 +881,6 @@ export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, reportsToPri
       }, 300);
     }
   };
-
-  const reportsArray = reportsToPrint && reportsToPrint.length > 0
-    ? reportsToPrint
-    : (report ? [report] : []);
-
-  const totalReportsCount = reportsArray.length;
-  const currentActiveReport = reportsArray[activeIndex] || null;
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm overflow-y-auto flex flex-col p-4 md:p-6 print-container no-print:p-0">
@@ -955,6 +955,11 @@ export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, reportsToPri
             <span>Assinaturas Ativas</span>
           </div>
 
+          <div className="hidden no-print flex-col justify-center px-2 mr-2">
+            <span className="text-[10px] text-amber-600 font-bold leading-tight">Nota: Se a janela de impressão não abrir,</span>
+            <span className="text-[9px] text-amber-700">Abra o aplicativo em uma nova guia.</span>
+          </div>
+
           {exportMode === "single" ? (
             <button
               onClick={triggerPrintCombined}
@@ -988,7 +993,7 @@ export const RdoPrintView: React.FC<RdoPrintViewProps> = ({ report, reportsToPri
       </div>
 
       {/* Pages Container */}
-      <div className="max-w-5xl w-full mx-auto bg-slate-100 p-0 md:p-4 rounded-b-xl flex flex-col gap-6 scroll-smooth print:gap-0 print:p-0 print:bg-white print:max-w-none print:w-full">
+      <div id="print-container-wrapper" className="max-w-5xl w-full mx-auto bg-slate-100 p-0 md:p-4 rounded-b-xl flex flex-col gap-6 scroll-smooth print:gap-0 print:p-0 print:bg-white print:max-w-none print:w-full">
         {exportMode === "single" ? (
           reportsArray.map((rep) => (
             <SingleReportPrint key={rep.id || rep.rdoNo} report={rep} />

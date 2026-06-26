@@ -44,7 +44,7 @@ interface RdoEditorProps {
 }
 
 export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
-  const { currentReport, setCurrentReport, saveReport, isFirebase, obras, reports, user, currentObra } = useRdoStore();
+  const { currentReport, setCurrentReport, saveReport, isFirebase, obras, reports, user, currentObra, isGlobalAdmin } = useRdoStore();
   const [activeTab, setActiveTab] = useState<"geral" | "atividades" | "paralisacoes" | "efetivo" | "equipamentos" | "anexos" | "assinaturas">("geral");
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -113,7 +113,7 @@ export const RdoEditor: React.FC<RdoEditorProps> = ({ onShowPrint }) => {
 
   const currentUserEmail = user && 'email' in user ? (user.email?.toLowerCase() || "") : "";
   const permission = currentObra?.permissoes?.find(p => p?.email?.toLowerCase() === currentUserEmail);
-  const accessLevel = permission ? permission.access : (currentObra?.userId === user?.uid ? "owner" : "view");
+  const accessLevel = isGlobalAdmin ? "owner" : (permission ? permission.access : (currentObra?.userId === user?.uid ? "owner" : "view"));
 
   const isReadOnly = accessLevel === "view" || (!user && !isFirebase); // If logged out locally, fallback read-only
   const isFiscalizacao = accessLevel === "fiscalizacao" || accessLevel === "owner";

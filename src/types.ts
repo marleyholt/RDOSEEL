@@ -173,7 +173,16 @@ export interface ObraActivity {
 
 export interface ObraPermission {
   email: string;
-  access: "view" | "edit" | "fiscalizacao" | "gerenciadora";
+  access: "view" | "edit" | "fiscalizacao" | "gerenciadora" | "adm";
+}
+
+export interface AuditLog {
+  id?: string;
+  userId: string;
+  userEmail: string;
+  action: string;
+  details: string;
+  timestamp: string;
 }
 
 export interface ObraConfig {

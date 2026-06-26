@@ -18,5 +18,9 @@ service cloud.firestore {
     match /obras/{obraId} {
       allow read, write: if isSignedIn();
     }
+
+    match /audit_logs/{logId} {
+      allow read, write: if isSignedIn();
+    }
   }
 }
